@@ -1,0 +1,32 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Car Driving Game</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div id="game-container">
+      <div class="menu">
+        <div id="ui">
+          <div id="speed">Speed: 0 km/h</div>
+          <div id="distance">Distance: 0 m</div>
+          <div id="instructions">
+            Use Arrow Keys or WASD to drive<br>
+            ↑/W: Accelerate | ↓/S: Brake | ←→/A/D: Steer
+          </div>
+        </div>
+        <div id="game-over" class="hidden">
+          <h1>Game Over!</h1>
+          <p>Distance traveled: <span id="final-distance">0</span> m</p>
+          <button id="restart">Restart</button>
+        </div>
+      </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>

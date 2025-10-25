@@ -76,6 +76,7 @@ class CarGame {
         this.createPlayerCar();
         this.createIntersection();
         this.spawnScenery();
+	this.createClouds();
         this.spawnTraffic();
         
         // Event listeners
@@ -224,27 +225,130 @@ class CarGame {
     }
     
     createTree(x, z) {
-        const treeGroup = new THREE.Group();
-        
-        // Trunk
-        const trunkGeometry = new THREE.CylinderGeometry(0.3, 0.4, 3, 8);
-        const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x4a2511 });
-        const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-        trunk.position.y = 1.5;
-        trunk.castShadow = true;
-        treeGroup.add(trunk);
-        
-        // Foliage
-        const foliageGeometry = new THREE.SphereGeometry(1.5, 8, 8);
-        const foliageMaterial = new THREE.MeshLambertMaterial({ color: 0x228b22 });
-        const foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
-        foliage.position.y = 3.5;
-        foliage.castShadow = true;
-        treeGroup.add(foliage);
-        
-        treeGroup.position.set(x, 0, z);
-        this.scene.add(treeGroup);
-        this.scenery.push({ mesh: treeGroup, type: 'tree', initialZ: z });
+	const treeGroup = new THREE.Group();
+	
+	// Random tree type: 0 = pine, 1 = round, 2 = oak
+	const treeType = Math.floor(Math.random() * 3);
+	
+	// Random size variation
+	const sizeScale = 0.7 + Math.random() * 0.6; // 0.7 to 1.3
+	
+	// Trunk - varied height and width
+	const trunkHeight = 2.5 + Math.random() * 1.5;
+	const trunkRadius = 0.25 + Math.random() * 0.15;
+	const trunkGeometry = new THREE.CylinderGeometry(trunkRadius, trunkRadius + 0.1, trunkHeight, 8);
+	const trunkColors = [0x4a2511, 0x3d1f0f, 0x5c3317];
+	const trunkMaterial = new THREE.MeshLambertMaterial({ 
+            color: trunkColors[Math.floor(Math.random() * trunkColors.length)] 
+	});
+	const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+	trunk.position.y = trunkHeight / 2;
+	trunk.castShadow = true;
+	treeGroup.add(trunk);
+	
+	// Foliage based on type
+	if (treeType === 0) {
+            // Pine tree - cone shape
+            const foliageGeometry = new THREE.ConeGeometry(1.2, 3, 8);
+            const foliageMaterial = new THREE.MeshLambertMaterial({ color: 0x1a5c1a });
+            const foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
+            foliage.position.y = trunkHeight + 0.8;  // CHANGED: from +1.5 to +0.8
+            foliage.castShadow = true;
+            treeGroup.add(foliage);
+            
+            // Second layer
+            const foliage2 = new THREE.Mesh(
+		new THREE.ConeGeometry(1, 2.5, 8),
+		foliageMaterial
+            );
+            foliage2.position.y = trunkHeight + 1.5;  // CHANGED: from +2.5 to +1.5
+            foliage2.castShadow = true;
+            treeGroup.add(foliage2);
+            
+	} else if (treeType === 1) {
+            // Round tree - sphere
+            const foliageGeometry = new THREE.SphereGeometry(1.5, 8, 8);
+            const foliageMaterial = new THREE.MeshLambertMaterial({ color: 0x228b22 });
+            const foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
+            foliage.position.y = trunkHeight + 0.3;  // CHANGED: from +1.2 to +0.3
+            foliage.castShadow = true;
+            treeGroup.add(foliage);
+            
+	} else {
+            // Oak tree - irregular clusters
+            const foliageMaterial = new THREE.MeshLambertMaterial({ color: 0x2e7d32 });
+            const clusterPositions = [
+		[0, trunkHeight + 0.8, 0, 1.3],          // CHANGED: from +1.5 to +0.8
+		[-0.6, trunkHeight + 0.3, 0.4, 0.9],     // CHANGED: from +1 to +0.3
+		[0.7, trunkHeight + 0.5, -0.3, 1],       // CHANGED: from +1.2 to +0.5
+		[0, trunkHeight + 1.3, 0, 0.8]           // CHANGED: from +2.2 to +1.3
+            ];
+            
+            clusterPositions.forEach(pos => {
+		const cluster = new THREE.Mesh(
+                    new THREE.SphereGeometry(pos[3], 6, 6),
+                    foliageMaterial
+		);
+		cluster.position.set(pos[0], pos[1], pos[2]);
+		cluster.castShadow = true;
+		treeGroup.add(cluster);
+            });
+	}
+	
+	treeGroup.scale.set(sizeScale, sizeScale, sizeScale);
+	treeGroup.position.set(x, 0, z);
+	this.scene.add(treeGroup);
+	this.scenery.push({ mesh: treeGroup, type: 'tree', initialZ: z });
+    }
+
+    createBush(x, z) {
+	const bushGroup = new THREE.Group();
+	
+	// Only 3 green color variants
+	const bushColors = [
+            0x2d5016,  // Dark green
+            0x3a7d44,  // Medium green (grass green)
+            0x4a9d5a   // Light green
+	];
+	
+	// Random bush type
+	const bushType = Math.floor(Math.random() * 2);
+	const bushMaterial = new THREE.MeshLambertMaterial({ 
+            color: bushColors[Math.floor(Math.random() * bushColors.length)]
+	});
+	
+	if (bushType === 0) {
+            // Round bush - single sphere, bigger
+            const bushGeometry = new THREE.SphereGeometry(1.2 + Math.random() * 0.6, 8, 8);  // CHANGED: from 0.8+0.4 to 1.2+0.6
+            const bush = new THREE.Mesh(bushGeometry, bushMaterial);
+            bush.position.y = 0.7;  // CHANGED: from 0.5 to 0.7
+            bush.scale.y = 0.8; // Flatten slightly
+            bush.castShadow = true;
+            bushGroup.add(bush);
+            
+	} else {
+            // Clustered bush - multiple small spheres
+            const clusterCount = 4 + Math.floor(Math.random() * 3);  // CHANGED: from 3+3 to 4+3
+            for (let i = 0; i < clusterCount; i++) {
+		const sphere = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.6 + Math.random() * 0.4, 6, 6),  // CHANGED: from 0.4+0.3 to 0.6+0.4
+                    bushMaterial
+		);
+		sphere.position.set(
+                    (Math.random() - 0.5) * 1.5,  // CHANGED: from 1.2 to 1.5
+                    0.4 + Math.random() * 0.4,
+                    (Math.random() - 0.5) * 1.5   // CHANGED: from 1.2 to 1.5
+		);
+		sphere.castShadow = true;
+		bushGroup.add(sphere);
+            }
+	}
+	
+	const scale = 1 + Math.random() * 0.5;  // CHANGED: from 0.6+0.5 to 1+0.5 (bigger)
+	bushGroup.scale.set(scale, scale, scale);
+	bushGroup.position.set(x, 0, z);
+	this.scene.add(bushGroup);
+	this.scenery.push({ mesh: bushGroup, type: 'bush', initialZ: z });
     }
 
     createPoliceCar(x, z) {
@@ -305,22 +409,187 @@ class CarGame {
     }
     
     spawnScenery() {
-	// Trees along the road
-	for (let z = -50; z < 300; z += 2) {
-            if (Math.abs(z - 100) > 15) {
-		const side = Math.random() > 0.5 ? 1 : -1;
-		this.createTree(side * (10 + Math.random() * 5), z);
+	// Trees and bushes along the road - Dense foreground scenery
+	for (let z = -50; z < 300; z += 8) {
+            if (Math.abs(z - 100) > 15) { // Avoid intersection
+		// Left side - mix of trees and bushes (40% bushes now)
+		if (Math.random() > 0.4) {
+                    this.createTree(-10 - Math.random() * 5, z);
+		} else {
+                    this.createBush(-10 - Math.random() * 3, z);
+		}
+		
+		// Right side - mix of trees and bushes (40% bushes now)
+		if (Math.random() > 0.4) {
+                    this.createTree(10 + Math.random() * 5, z);
+		} else {
+                    this.createBush(10 + Math.random() * 3, z);
+		}
             }
 	}
 	
-	// Houses
+	// Additional bushes near road edge - FIXED: Keep off road
+	for (let z = -50; z < 300; z += 10) {
+            if (Math.random() > 0.3) {
+		this.createBush(-11 - Math.random() * 2, z);  // CHANGED: from -9 to -11 (further from road)
+            }
+            if (Math.random() > 0.3) {
+		this.createBush(11 + Math.random() * 2, z);  // CHANGED: from 9 to 11 (further from road)
+            }
+	}
+	
+	// Background trees - Far from road for depth
+	for (let z = -50; z < 300; z += 15) {
+            // Far left background
+            if (Math.random() > 0.5) {
+		this.createTree(-20 - Math.random() * 10, z);
+            }
+            // Far right background
+            if (Math.random() > 0.5) {
+		this.createTree(20 + Math.random() * 10, z);
+            }
+	}
+	
+	// Dense bush clusters in far background
+	for (let z = -50; z < 300; z += 12) {
+            // Left background bushes
+            if (Math.random() > 0.4) {
+		this.createBush(-18 - Math.random() * 8, z);
+            }
+            // Right background bushes
+            if (Math.random() > 0.4) {
+		this.createBush(18 + Math.random() * 8, z);
+            }
+	}
+	
+	// Scattered tree groups for variety
+	for (let z = 0; z < 300; z += 30) {
+            // Create small tree clusters
+            const clusterX = (Math.random() > 0.5 ? 1 : -1) * (15 + Math.random() * 10);
+            for (let i = 0; i < 3; i++) {
+		this.createTree(
+                    clusterX + (Math.random() - 0.5) * 5,
+                    z + (Math.random() - 0.5) * 10
+		);
+            }
+	}
+	
+	// Houses - More scattered along the landscape
 	this.createHouse(-15, 30);
 	this.createHouse(15, 150);
 	this.createHouse(-18, 220);
+	this.createHouse(20, 60);
+	this.createHouse(-22, 120);
+	this.createHouse(18, 200);
+	this.createHouse(-16, 270);
+	this.createHouse(22, 50);
+	
+	// Add some houses with different colors for variety
+	this.createColoredHouse(-20, 180, 0xc9a86a);  // Beige
+	this.createColoredHouse(17, 240, 0xe8d4b0);   // Light tan
+	this.createColoredHouse(-19, 10, 0xb89968);   // Brown
 	
 	// Police cars on roadside (stationary)
 	this.createPoliceCar(-12, 80);
 	this.createPoliceCar(12, 180);
+	this.createPoliceCar(-12, 250);
+    }
+
+    createColoredHouse(x, z, color) {
+	const houseGroup = new THREE.Group();
+	
+	// House body with custom color
+	const bodyGeometry = new THREE.BoxGeometry(4, 3, 4);
+	const bodyMaterial = new THREE.MeshLambertMaterial({ color: color });
+	const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+	body.position.y = 1.5;
+	body.castShadow = true;
+	houseGroup.add(body);
+	
+	// Roof
+	const roofGeometry = new THREE.ConeGeometry(3, 2, 4);
+	const roofMaterial = new THREE.MeshLambertMaterial({ color: 0x8b4513 });
+	const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+	roof.position.y = 3.5;
+	roof.rotation.y = Math.PI / 4;
+	roof.castShadow = true;
+	houseGroup.add(roof);
+	
+	// Door
+	const doorGeometry = new THREE.BoxGeometry(0.8, 1.5, 0.1);
+	const doorMaterial = new THREE.MeshLambertMaterial({ color: 0x4a2511 });
+	const door = new THREE.Mesh(doorGeometry, doorMaterial);
+	door.position.set(0, 0.75, 2.05);
+	houseGroup.add(door);
+	
+	// Windows
+	const windowGeometry = new THREE.BoxGeometry(0.6, 0.6, 0.1);
+	const windowMaterial = new THREE.MeshLambertMaterial({ color: 0x87ceeb });
+	
+	const window1 = new THREE.Mesh(windowGeometry, windowMaterial);
+	window1.position.set(-1, 1.8, 2.05);
+	houseGroup.add(window1);
+	
+	const window2 = new THREE.Mesh(windowGeometry, windowMaterial);
+	window2.position.set(1, 1.8, 2.05);
+	houseGroup.add(window2);
+	
+	houseGroup.position.set(x, 0, z);
+	this.scene.add(houseGroup);
+	this.scenery.push({ mesh: houseGroup, type: 'house', initialZ: z });
+    }
+
+    createClouds() {
+	const cloudGroup = new THREE.Group();
+	
+	// Create 20 clouds scattered in the sky
+	for (let i = 0; i < 20; i++) {
+            const cloud = this.createSingleCloud();
+            
+            // Random position in sky
+            cloud.position.set(
+		-50 + Math.random() * 100,  // Spread across width
+		20 + Math.random() * 30,     // Height in sky (20-50 units up)
+		-100 + Math.random() * 400   // Spread along road
+            );
+            
+            // Random rotation
+            cloud.rotation.y = Math.random() * Math.PI * 2;
+            
+            // CHANGED: Make clouds bigger with larger scale
+            const scale = 2 + Math.random() * 2;  // Scale from 2 to 4 (was 0.8 to 1.4)
+            cloud.scale.set(scale, scale, scale);
+            
+            this.scene.add(cloud);
+            this.scenery.push({ mesh: cloud, type: 'cloud' });
+	}
+    }
+
+    createSingleCloud() {
+	const cloudGroup = new THREE.Group();
+	const cloudMaterial = new THREE.MeshLambertMaterial({ 
+            color: 0xffffff,
+            // transparent: true,
+            opacity: 0.8
+	});
+	
+	// Create fluffy cloud with multiple spheres - BIGGER SPHERES
+	const spherePositions = [
+            [0, 0, 0, 2.5],       // Center, larger (was 1.2)
+            [-2, 0.4, 1, 1.8],    // Left (was -1, 0.2, 0.5, 0.8)
+            [2, 0.2, -0.6, 2],    // Right (was 1, 0.1, -0.3, 0.9)
+            [0.6, 1, 0, 1.5],     // Top (was 0.3, 0.5, 0, 0.7)
+            [-1, -0.4, -1, 1.3]   // Bottom (was -0.5, -0.2, -0.5, 0.6)
+	];
+	
+	spherePositions.forEach(pos => {
+            const geometry = new THREE.SphereGeometry(pos[3], 8, 8);
+            const sphere = new THREE.Mesh(geometry, cloudMaterial);
+            sphere.position.set(pos[0], pos[1], pos[2]);
+            cloudGroup.add(sphere);
+	});
+	
+	return cloudGroup;
     }
     
     spawnTraffic() {

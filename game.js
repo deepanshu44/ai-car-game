@@ -42,8 +42,10 @@ class CarGame {
     init() {
         // Scene setup
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x87CEEB);
-        this.scene.fog = new THREE.Fog(0x87CEEB, 50, 200);
+        // this.scene.background = new THREE.Color(0x87CEEB);
+        // this.scene.fog = new THREE.Fog(0x87CEEB, 50, 200);
+	this.scene.background = new THREE.Color(0x000011); // Dark night sky
+	// this.scene.fog = new THREE.Fog(0x000011, 5, 20); // Fog for depth
         
         // Camera
         this.camera = new THREE.PerspectiveCamera(
@@ -62,9 +64,16 @@ class CarGame {
         document.getElementById('game-container').appendChild(this.renderer.domElement);
         
         // Lights
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        this.scene.add(ambientLight);
-        
+        // const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        // this.scene.add(ambientLight);
+
+	const moonLight = new THREE.DirectionalLight(0x9999cc, 0.3);
+	moonLight.position.set(10, 20, 10);
+	moonLight.castShadow = true;
+	moonLight.shadow.mapSize.width = 2048;
+	moonLight.shadow.mapSize.height = 2048;
+	this.scene.add(moonLight);
+	
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
         directionalLight.position.set(10, 20, 10);
         directionalLight.castShadow = true;
@@ -165,7 +174,11 @@ class CarGame {
         
         // Car body
         const bodyGeometry = new THREE.BoxGeometry(2, 1, 4);
-        const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+        const bodyMaterial = new THREE.MeshLambertMaterial({
+	    color: 0xff0000,
+	    metalness: 0.5,
+	    roughness: 0.3,
+	});
         const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
         body.position.y = 0.5;
         body.castShadow = true;
@@ -179,8 +192,30 @@ class CarGame {
         roof.position.z = -0.3;
         roof.castShadow = true;
         carGroup.add(roof);
+
+	const headlightGeometry = new THREE.SphereGeometry(0.2, 32, 32);
+        const headlightMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffffcc,
+            emissive: 0xffffcc,
+            emissiveIntensity: 2,
+        });
+
+        // Taillights (glowing spheres)
+        const taillightMaterial = new THREE.MeshStandardMaterial({
+            color: 0xff3333,
+            emissive: 0xff3333,
+            emissiveIntensity: 1,
+        });
+        const taillight1 = new THREE.Mesh(headlightGeometry, taillightMaterial);
+        taillight1.position.set(-0.8, 0.8, -1.9);
+        carGroup.add(taillight1);
+
+        const taillight2 = new THREE.Mesh(headlightGeometry, taillightMaterial);
+        taillight2.position.set(0.8, 0.8, -1.9);
+        carGroup.add(taillight2);
+
         
-        // Wheels
+	// Wheels
         const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
         const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
         
@@ -609,7 +644,9 @@ class CarGame {
 	const bodyGeometry = new THREE.BoxGeometry(2, 1, 4);
 	const colors = [0x0000ff, 0x00ff00, 0xffff00, 0xff00ff, 0x00ffff];
 	const bodyMaterial = new THREE.MeshLambertMaterial({ 
-            color: colors[Math.floor(Math.random() * colors.length)] 
+            color: colors[Math.floor(Math.random() * colors.length)],
+	    metalness: 0.5,
+	    roughness: 0.3,
 	});
 	const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
 	body.position.y = 0.5;
@@ -623,6 +660,39 @@ class CarGame {
 	roof.position.z = -0.3;
 	roof.castShadow = true;
 	carGroup.add(roof);
+
+	const headlightGeometry = new THREE.SphereGeometry(0.2, 32, 32);
+        const headlightMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffffcc,
+            emissive: 0xffffcc,
+            emissiveIntensity: 2,
+        });
+        const headlight1 = new THREE.Mesh(headlightGeometry, headlightMaterial);
+        headlight1.position.set(-0.8, 0.8, -1.9);
+        carGroup.add(headlight1);
+
+        const headlight2 = new THREE.Mesh(headlightGeometry, headlightMaterial);
+        headlight2.position.set(0.8, 0.8, -1.9);
+        carGroup.add(headlight2);
+
+	// Wheels
+        const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
+        const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
+        
+        const wheelPositions = [
+            [-1.1, 0.4, 1.3],
+            [1.1, 0.4, 1.3],
+            [-1.1, 0.4, -1.3],
+            [1.1, 0.4, -1.3]
+        ];
+        
+        wheelPositions.forEach(pos => {
+            const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+            wheel.rotation.z = Math.PI / 2;
+            wheel.position.set(...pos);
+            wheel.castShadow = true;
+            carGroup.add(wheel);
+        });
 	
 	carGroup.position.set(laneX, 0, z);  // Use laneX parameter instead of this.trafficLane
 	this.scene.add(carGroup);

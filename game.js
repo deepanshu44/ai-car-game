@@ -40,63 +40,58 @@ class CarGame {
     }
     
     init() {
-        // Scene setup
-        this.scene = new THREE.Scene();
-        // this.scene.background = new THREE.Color(0x87CEEB);
-        // this.scene.fog = new THREE.Fog(0x87CEEB, 50, 200);
-	this.scene.background = new THREE.Color(0x000011); // Dark night sky
-	// this.scene.fog = new THREE.Fog(0x000011, 5, 20); // Fog for depth
-        
-        // Camera
-        this.camera = new THREE.PerspectiveCamera(
+	// Scene setup
+	this.scene = new THREE.Scene();
+	// Don't set background here, let createNightSky() handle it
+	
+	// Camera
+	this.camera = new THREE.PerspectiveCamera(
             75,
             window.innerWidth / window.innerHeight,
             0.1,
             1000
-        );
-        this.camera.position.set(0, 5, -10);
-        this.camera.lookAt(0, 0, 0);
-        
-        // Renderer
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.shadowMap.enabled = true;
-        document.getElementById('game-container').appendChild(this.renderer.domElement);
-        
-        // Lights
-        // const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        // this.scene.add(ambientLight);
-
-	const moonLight = new THREE.DirectionalLight(0x9999cc, 0.3);
-	moonLight.position.set(10, 20, 10);
-	moonLight.castShadow = true;
-	moonLight.shadow.mapSize.width = 2048;
-	moonLight.shadow.mapSize.height = 2048;
-	this.scene.add(moonLight);
+	);
+	this.camera.position.set(0, 5, -10);
+	this.camera.lookAt(0, 0, 0);
 	
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(10, 20, 10);
-        directionalLight.castShadow = true;
-        this.scene.add(directionalLight);
-        
-        // Create game elements
-        this.createRoad();
+	// Renderer
+	this.renderer = new THREE.WebGLRenderer({ antialias: true });
+	this.renderer.setSize(window.innerWidth, window.innerHeight);
+	this.renderer.shadowMap.enabled = true;
+	document.getElementById('game-container').appendChild(this.renderer.domElement);
+	
+	// Create night sky BEFORE lights
+	this.createNightSky();
+	
+	// Lights - Adjust for night time
+	const ambientLight = new THREE.AmbientLight(0x404060, 0.4);  // Darker, blueish ambient
+	this.scene.add(ambientLight);
+	
+	const directionalLight = new THREE.DirectionalLight(0x8888bb, 0.5);  // Moonlight color, dimmer
+	directionalLight.position.set(10, 20, 10);
+	directionalLight.castShadow = true;
+	this.scene.add(directionalLight);
+	
+	// Create game elements
+	this.createRoad();
 	this.createRoadDivider();
-        this.createPlayerCar();
-        this.createIntersection();
-        this.spawnScenery();
-	this.createClouds();
-        this.spawnTraffic();
-        
-        // Event listeners
-        window.addEventListener('keydown', (e) => this.keys[e.key.toLowerCase()] = true);
-        window.addEventListener('keyup', (e) => this.keys[e.key.toLowerCase()] = false);
-        window.addEventListener('resize', () => this.onWindowResize());
-        
-        document.getElementById('restart').addEventListener('click', () => this.restart());
-        
-        // Start game loop
-        this.gameLoop();
+	this.createStreetLamps();
+	this.createPlayerCar();
+	this.createPlayerCarLights();
+	this.createIntersection();
+	this.spawnScenery();
+	this.createClouds();  // Clouds at night (optional, can remove)
+	this.spawnTraffic();
+	
+	// Event listeners
+	window.addEventListener('keydown', (e) => this.keys[e.key.toLowerCase()] = true);
+	window.addEventListener('keyup', (e) => this.keys[e.key.toLowerCase()] = false);
+	window.addEventListener('resize', () => this.onWindowResize());
+	
+	document.getElementById('restart').addEventListener('click', () => this.restart());
+	
+	// Start game loop
+	this.gameLoop();
     }
     
     createRoad() {
@@ -385,7 +380,171 @@ class CarGame {
 	this.scene.add(bushGroup);
 	this.scenery.push({ mesh: bushGroup, type: 'bush', initialZ: z });
     }
+    
+    createStreetLamp(x, z) {
+	const lampGroup = new THREE.Group();
+	
+	// Pole
+	const poleGeometry = new THREE.CylinderGeometry(0.15, 0.15, 5, 8);
+	const poleMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+	const pole = new THREE.Mesh(poleGeometry, poleMaterial);
+	pole.position.y = 2.5;
+	pole.castShadow = false;
+	lampGroup.add(pole);
+	
+	// Lamp head (top box)
+	const lampHeadGeometry = new THREE.BoxGeometry(0.4, 0.6, 0.4);
+	const lampHeadMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
+	const lampHead = new THREE.Mesh(lampHeadGeometry, lampHeadMaterial);
+	lampHead.position.y = 5.3;
+	lampHead.castShadow = false;
+	lampGroup.add(lampHead);
+	
+	// Light bulb (glowing part)
+	const bulbGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+	const bulbMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xffffbb,
+            emissive: 0xffffbb,
+            emissiveIntensity: 1.5
+	});
+	const bulb = new THREE.Mesh(bulbGeometry, bulbMaterial);
+	bulb.position.y = 5;
+	lampGroup.add(bulb);
+	
+	// Point light from the lamp
+	const light = new THREE.PointLight(0xffffcc, .5, 20);
+	light.position.y = 5;
+	light.castShadow = false;
+	lampGroup.add(light);
+	
+	// Realistic ground light pool with gradient fade - IMPROVED
+	const canvas = document.createElement('canvas');
+	canvas.width = 256;
+	canvas.height = 256;
+	const context = canvas.getContext('2d');
+	
+	// Create radial gradient from bright center to transparent edge
+	const gradient = context.createRadialGradient(128, 128, 0, 128, 128, 128);
+	gradient.addColorStop(0, 'rgba(255, 255, 200, 0.8)');    // Bright center
+	gradient.addColorStop(0.3, 'rgba(255, 255, 180, 0.5)');  // Still bright
+	gradient.addColorStop(0.6, 'rgba(255, 255, 150, 0.2)');  // Fading
+	gradient.addColorStop(1, 'rgba(255, 255, 100, 0)');      // Transparent edge
+	
+	context.fillStyle = gradient;
+	context.fillRect(0, 0, 256, 256);
+	
+	const texture = new THREE.CanvasTexture(canvas);
+	
+	const lightPoolGeometry = new THREE.CircleGeometry(5, 32);  // Larger radius, more segments
+	const lightPoolMaterial = new THREE.MeshBasicMaterial({ 
+            map: texture,
+            transparent: true,
+            opacity: 1,
+            side: THREE.DoubleSide,
+            blending: THREE.AdditiveBlending  // Makes it glow nicely
+	});
+	const lightPool = new THREE.Mesh(lightPoolGeometry, lightPoolMaterial);
+	lightPool.rotation.x = -Math.PI / 2;
+	lightPool.position.y = 0.05;
+	lampGroup.add(lightPool);
+	
+	lampGroup.position.set(x, 0, z);
+	this.scene.add(lampGroup);
+	this.scenery.push({ mesh: lampGroup, type: 'lamp', initialZ: z });
+    }
 
+    createStreetLamps() {
+	// Place lamps on both sides of the road - LESS DENSE
+	for (let z = -50; z < 300; z += 40) {  // CHANGED: from 25 to 40
+            // Left side of road
+            this.createStreetLamp(-9.5, z);
+            
+            // Right side of road
+            this.createStreetLamp(9.5, z);
+	}
+    }
+
+    createPlayerCarLights() {
+	// Headlight 1 (left)
+	const headlight1 = new THREE.SpotLight(0xffffee, 1.5, 30, Math.PI / 6, 0.5);
+	headlight1.position.set(-0.7, 1, 2);
+	headlight1.target.position.set(-0.7, 0, 10);
+	this.playerCar.add(headlight1);
+	this.playerCar.add(headlight1.target);
+	
+	// Create gradient texture with MORE distance fading
+	const canvas = document.createElement('canvas');
+	canvas.width = 512;
+	canvas.height = 512;
+	const context = canvas.getContext('2d');
+	
+	// Create radial gradient with MORE fade stops
+	const gradient = context.createRadialGradient(256, 512, 0, 256, 300, 450);
+	gradient.addColorStop(0, 'rgba(255, 255, 230, 0)');    // REDUCED: from 0.9 to 0.5 at car
+	gradient.addColorStop(0.2, 'rgba(255, 255, 220, 0.1)'); // REDUCED: from 0.6 to 0.35
+	gradient.addColorStop(0.4, 'rgba(255, 255, 200, 0.3)');  // REDUCED: from 0.3 to 0.2
+	gradient.addColorStop(0.6, 'rgba(255, 255, 180, 0.5)');  // More gradual fade
+	gradient.addColorStop(0.8, 'rgba(255, 255, 160, 0.75)'); // Almost gone
+	gradient.addColorStop(1, 'rgba(255, 255, 150, 1)');      // Fully transparent
+	
+	context.fillStyle = gradient;
+	context.fillRect(0, 0, 512, 512);
+	
+	const texture = new THREE.CanvasTexture(canvas);
+	
+	// Create SMALLER semi-circular fan shape - Left headlight
+	const segments = 32;
+	const radius = 12;  // REDUCED: from 18 to 12
+	const angle = Math.PI * 0.2;  // REDUCED: from 0.7 (126°) to 0.5 (90°)
+	
+	const vertices1 = [];
+	const uvs1 = [];
+	const indices1 = [];
+	
+	// Center point (at car)
+	vertices1.push(0, 0, 0);
+	uvs1.push(0.5, 1.0);
+	
+	// Create arc vertices
+	for (let i = 0; i <= segments; i++) {
+            const theta = -angle / 2 + (angle / segments) * i;
+            const x = Math.sin(theta) * radius;
+            const z = Math.cos(theta) * radius;
+            
+            vertices1.push(x, 0, z);
+            
+            // UV coordinates for arc
+            const u = 0.5 + Math.sin(theta) * 0.5;
+            const v = 0.5 - Math.cos(theta) * 0.5;
+            uvs1.push(u, v);
+	}
+	
+	// Create triangle fan indices
+	for (let i = 0; i < segments; i++) {
+            indices1.push(0, i + 1, i + 2);
+	}
+	
+	const beamGeometry1 = new THREE.BufferGeometry();
+	beamGeometry1.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices1), 3));
+	beamGeometry1.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs1), 2));
+	beamGeometry1.setIndex(indices1);
+	beamGeometry1.computeVertexNormals();
+	
+	const beamMaterial1 = new THREE.MeshBasicMaterial({ 
+            map: texture,
+            transparent: true,
+            opacity: 0.4,  // REDUCED: from 1 to 0.8
+            side: THREE.DoubleSide,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+	});
+	
+	const beam1 = new THREE.Mesh(beamGeometry1, beamMaterial1);
+	beam1.position.set(0, 0.1, 2);
+	this.playerCar.add(beam1);
+	
+    }
+    
     createPoliceCar(x, z) {
 	const carGroup = new THREE.Group();
 	
@@ -442,6 +601,51 @@ class CarGame {
         this.scene.add(houseGroup);
         this.scenery.push({ mesh: houseGroup, type: 'house', initialZ: z });
     }
+
+    createNightSky() {
+	// Change sky to dark blue/black
+	this.scene.background = new THREE.Color(0x0a0a1a);
+	this.scene.fog = new THREE.Fog(0x1a1a2e, 30, 120);  // CHANGED: Thicker fog, darker color, closer range
+	
+	// Create starfield - REDUCED
+	const starGeometry = new THREE.BufferGeometry();
+	const starCount = 300;
+	const positions = new Float32Array(starCount * 3);
+	
+	for (let i = 0; i < starCount * 3; i += 3) {
+            positions[i] = (Math.random() - 0.5) * 200;
+            positions[i + 1] = 30 + Math.random() * 70;
+            positions[i + 2] = (Math.random() - 0.5) * 200;
+	}
+	
+	starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+	
+	const starMaterial = new THREE.PointsMaterial({
+            color: 0xffffff,
+            size: 0.3,
+            transparent: true,
+            opacity: 0.8
+	});
+	
+	const stars = new THREE.Points(starGeometry, starMaterial);
+	this.scene.add(stars);
+	this.stars = stars;
+	
+	this.createMoon();
+    }
+
+    createMoon() {
+	const moonGeometry = new THREE.SphereGeometry(3, 16, 16);
+	const moonMaterial = new THREE.MeshLambertMaterial({ 
+            color: 0xffffcc,
+            emissive: 0xffffaa,
+            emissiveIntensity: 0.3
+	});
+	const moon = new THREE.Mesh(moonGeometry, moonMaterial);
+	moon.position.set(40, 50, 100);
+	this.scene.add(moon);
+	this.moon = moon;
+    }
     
     spawnScenery() {
 	// Trees and bushes along the road - Dense foreground scenery
@@ -472,7 +676,7 @@ class CarGame {
 		this.createBush(11 + Math.random() * 2, z);  // CHANGED: from 9 to 11 (further from road)
             }
 	}
-	
+
 	// Background trees - Far from road for depth
 	for (let z = -50; z < 300; z += 15) {
             // Far left background
@@ -786,6 +990,11 @@ class CarGame {
 	
 	// Move world towards player
 	const worldSpeed = this.speed;
+
+	if (this.scene.fog) {
+            this.scene.fog.near = 30 + Math.sin(Date.now() * 0.0005) * 5;
+            this.scene.fog.far = 120 + Math.sin(Date.now() * 0.0003) * 10;
+	}
 	
 	// Update road segments
 	this.roadSegments.forEach(segment => {
@@ -858,6 +1067,9 @@ class CarGame {
             // Cannot rewind - red border
             rewindBarContainer.classList.add('cannot-rewind');
             rewindBarContainer.classList.remove('can-rewind');
+	}
+	if (this.stars) {
+            this.stars.material.opacity = 0.6 + Math.sin(Date.now() * 0.001) * 0.2;
 	}
     }
     

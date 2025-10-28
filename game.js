@@ -7,6 +7,7 @@ class CarGame {
 	this.playerCar = null;
 	this.policeCars = [];
 	this.traffic = [];
+	this.crossingTraffic = [];
 	this.scenery = [];
 	this.roadSegments = [];
 	this.roadDividers = [];
@@ -102,7 +103,7 @@ class CarGame {
             const road = new THREE.Mesh(roadGeometry, roadMaterial);
             road.rotation.x = -Math.PI / 2;
             road.position.z = i * 500 - 500;
-            road.receiveShadow = true;
+            road.receiveShadow = false;
             this.scene.add(road);
             this.roadSegments.push(road);
 	}
@@ -110,21 +111,286 @@ class CarGame {
 	// Lane markers
 	this.createLaneMarkers();
 	
-	// Grass on sides
-	const grassGeometry = new THREE.PlaneGeometry(50, 500);
-	const grassMaterial = new THREE.MeshLambertMaterial({ color: 0x3a7d44 });
+	// Create procedural grass texture
+	const grassTexture = this.createGrassTexture();
 	
-	const grassLeft = new THREE.Mesh(grassGeometry, grassMaterial);
-	grassLeft.rotation.x = -Math.PI / 2;
-	grassLeft.position.x = -34;  // Change from -32.5 to -34
-	grassLeft.receiveShadow = true;
-	this.scene.add(grassLeft);
+	// Grass on sides with texture and color variation
+	const grassPatches = [
+            { x: -34, color: 0x3a7d44 },     // Medium green
+            { x: -34, color: 0x2d5016 },     // Dark green
+            { x: -34, color: 0x4a9d5a },     // Light green
+            { x: 34, color: 0x3a7d44 },      // Medium green
+            { x: 34, color: 0x2d5016 },      // Dark green
+            { x: 34, color: 0x4a9d5a }       // Light green
+	];
 	
-	const grassRight = new THREE.Mesh(grassGeometry, grassMaterial);
-	grassRight.rotation.x = -Math.PI / 2;
-	grassRight.position.x = 34;  // Change from 32.5 to 34
-	grassRight.receiveShadow = true;
-	this.scene.add(grassRight);
+	grassPatches.forEach((patch, index) => {
+            const grassGeometry = new THREE.PlaneGeometry(50, 500);
+            const grassMaterial = new THREE.MeshLambertMaterial({ 
+		map: grassTexture,
+		color: patch.color
+            });
+            
+            const grass = new THREE.Mesh(grassGeometry, grassMaterial);
+            grass.rotation.x = -Math.PI / 2;
+            grass.position.x = patch.x;
+            grass.position.z = (index % 3) * 166 - 166;  // Offset z positions
+            grass.receiveShadow = false;
+            this.scene.add(grass);
+	});
+    }
+
+    createHighwayBridge(z) {
+	const bridgeGroup = new THREE.Group();
+	
+	// Bridge deck (road surface)
+	const deckGeometry = new THREE.BoxGeometry(80, 0.5, 12);
+	const deckMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
+	const deck = new THREE.Mesh(deckGeometry, deckMaterial);
+	deck.position.y = 8;
+	deck.castShadow = false;
+	bridgeGroup.add(deck);
+	
+	// Bridge railings
+	const railingGeometry = new THREE.BoxGeometry(80, 1, 0.3);
+	const railingMaterial = new THREE.MeshLambertMaterial({ color: 0x666666 });
+	
+	const railingLeft = new THREE.Mesh(railingGeometry, railingMaterial);
+	railingLeft.position.set(0, 8.75, -6);
+	bridgeGroup.add(railingLeft);
+	
+	const railingRight = new THREE.Mesh(railingGeometry, railingMaterial);
+	railingRight.position.set(0, 8.75, 6);
+	bridgeGroup.add(railingRight);
+	
+	// Support pillars
+	const pillarGeometry = new THREE.BoxGeometry(2, 8, 2);
+	const pillarMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
+	
+	const pillarPositions = [-30, -15, 15, 30];
+	pillarPositions.forEach(x => {
+            // Left side pillars
+            const pillarL = new THREE.Mesh(pillarGeometry, pillarMaterial);
+            pillarL.position.set(x, 4, -8);
+            pillarL.castShadow = false;
+            bridgeGroup.add(pillarL);
+            
+            // Right side pillars
+            const pillarR = new THREE.Mesh(pillarGeometry, pillarMaterial);
+            pillarR.position.set(x, 4, 8);
+            pillarR.castShadow = false;
+            bridgeGroup.add(pillarR);
+	});
+	
+	// Add some bridge cars (stationary traffic on bridge)
+	const bridgeCarColors = [0xff0000, 0x0000ff, 0xffff00, 0x00ff00];
+	for (let i = 0; i < 4; i++) {
+            const carBody = new THREE.Mesh(
+		new THREE.BoxGeometry(2, 1, 4),
+		new THREE.MeshLambertMaterial({ 
+                    color: bridgeCarColors[i] 
+		})
+            );
+            carBody.position.set(-35 + i * 20, 9, Math.random() * 8 - 4);
+            carBody.castShadow = false;
+            bridgeGroup.add(carBody);
+	}
+	
+	// Bridge shadow/underpass effect
+	const shadowGeometry = new THREE.PlaneGeometry(80, 12);
+	const shadowMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x000000,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide
+	});
+	const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
+	shadow.rotation.x = -Math.PI / 2;
+	shadow.position.y = 0.15;
+	bridgeGroup.add(shadow);
+	
+	bridgeGroup.position.set(0, 0, z);
+	this.scene.add(bridgeGroup);
+	this.scenery.push({ mesh: bridgeGroup, type: 'bridge', initialZ: z });
+    }
+
+    createLiveIntersection(z) {
+	const intersectionGroup = new THREE.Group();
+	
+	// Intersection road surface (crossing left-right)
+	const crossRoadGeometry = new THREE.PlaneGeometry(80, 20);
+	const crossRoadMaterial = new THREE.MeshLambertMaterial({ color: 0x3a3a3a });
+	const crossRoad = new THREE.Mesh(crossRoadGeometry, crossRoadMaterial);
+	crossRoad.rotation.x = -Math.PI / 2;
+	crossRoad.position.y = 0.02;
+	intersectionGroup.add(crossRoad);
+	
+	// Crosswalk lines
+	const crosswalkMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
+	for (let i = 0; i < 8; i++) {
+            const line = new THREE.Mesh(
+		new THREE.PlaneGeometry(1.5, 20),
+		crosswalkMaterial
+            );
+            line.rotation.x = -Math.PI / 2;
+            line.position.set(-12 + i * 3.5, 0.03, 0);
+            intersectionGroup.add(line);
+	}
+	
+	// Traffic lights
+	this.createTrafficLight(intersectionGroup, -10, -12);
+	this.createTrafficLight(intersectionGroup, -10, 12);
+	this.createTrafficLight(intersectionGroup, 10, -12);
+	this.createTrafficLight(intersectionGroup, 10, 12);
+	
+	intersectionGroup.position.set(0, 0, z);
+	this.scene.add(intersectionGroup);
+	this.scenery.push({ mesh: intersectionGroup, type: 'intersection', initialZ: z });
+	
+	// Spawn crossing traffic cars
+	this.spawnCrossingTraffic(z);
+    }
+
+    createTrafficLight(parent, x, z) {
+	const poleGeometry = new THREE.CylinderGeometry(0.1, 0.1, 3, 8);
+	const poleMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+	const pole = new THREE.Mesh(poleGeometry, poleMaterial);
+	pole.position.set(x, 1.5, z);
+	parent.add(pole);
+	
+	// Light box
+	const lightBoxGeometry = new THREE.BoxGeometry(0.3, 0.8, 0.3);
+	const lightBoxMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
+	const lightBox = new THREE.Mesh(lightBoxGeometry, lightBoxMaterial);
+	lightBox.position.set(x, 3.4, z);
+	parent.add(lightBox);
+	
+	// Red light
+	const redLight = new THREE.Mesh(
+            new THREE.SphereGeometry(0.12, 8, 8),
+            new THREE.MeshBasicMaterial({ 
+		color: 0xff0000,
+		emissive: 0xff0000,
+		emissiveIntensity: 0.5
+            })
+	);
+	redLight.position.set(x, 3.6, z);
+	parent.add(redLight);
+	
+	// Yellow light
+	const yellowLight = new THREE.Mesh(
+            new THREE.SphereGeometry(0.12, 8, 8),
+            new THREE.MeshBasicMaterial({ color: 0x333300 })
+	);
+	yellowLight.position.set(x, 3.4, z);
+	parent.add(yellowLight);
+	
+	// Green light
+	const greenLight = new THREE.Mesh(
+            new THREE.SphereGeometry(0.12, 8, 8),
+            new THREE.MeshBasicMaterial({ color: 0x003300 })
+	);
+	greenLight.position.set(x, 3.2, z);
+	parent.add(greenLight);
+    }
+
+    spawnCrossingTraffic(intersectionZ) {
+	// Create cars that move left-right across the intersection
+	for (let i = 0; i < 3; i++) {
+            const carGroup = new THREE.Group();
+            
+            const bodyGeometry = new THREE.BoxGeometry(2, 1, 4);
+            const colors = [0xff00ff, 0x00ffff, 0xffa500];
+            const bodyMaterial = new THREE.MeshLambertMaterial({ 
+		color: colors[i] 
+            });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = 0.5;
+            body.castShadow = false;
+            carGroup.add(body);
+            
+            const roof = new THREE.Mesh(
+		new THREE.BoxGeometry(1.6, 0.8, 2),
+		bodyMaterial
+            );
+            roof.position.y = 1.4;
+            roof.position.z = -0.3;
+            carGroup.add(roof);
+            
+            // Position cars going left to right
+            carGroup.position.set(-40 - i * 15, 0, intersectionZ + (Math.random() - 0.5) * 8);
+            carGroup.rotation.y = Math.PI / 2;  // Face right
+            
+            this.scene.add(carGroup);
+            this.crossingTraffic.push({ 
+		mesh: carGroup, 
+		speed: 0.3 + Math.random() * 0.2,
+		intersectionZ: intersectionZ
+            });
+	}
+    }
+    
+    createGrassTexture() {
+	const canvas = document.createElement('canvas');
+	canvas.width = 512;
+	canvas.height = 512;
+	const ctx = canvas.getContext('2d');
+	
+	// Base grass color
+	ctx.fillStyle = '#2d5016';
+	ctx.fillRect(0, 0, 512, 512);
+	
+	// Add random grass blades/texture
+	for (let i = 0; i < 15000; i++) {
+            const x = Math.random() * 512;
+            const y = Math.random() * 512;
+            const shade = Math.random() * 60;
+            const greenValue = 80 + shade;
+            const blueValue = 20 + Math.random() * 30;
+            
+            ctx.fillStyle = `rgb(${Math.random() * 40}, ${greenValue}, ${blueValue})`;
+            
+            // Random size dots for variety
+            const size = Math.random() < 0.7 ? 1 : 2;
+            ctx.fillRect(x, y, size, size);
+	}
+	
+	// Add some longer grass strokes
+	for (let i = 0; i < 3000; i++) {
+            const x = Math.random() * 512;
+            const y = Math.random() * 512;
+            const shade = Math.random() * 50;
+            
+            ctx.strokeStyle = `rgba(${Math.random() * 30}, ${100 + shade}, ${30 + shade}, 0.4)`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + (Math.random() - 0.5) * 3, y + Math.random() * 5);
+            ctx.stroke();
+	}
+	
+	// Add darker patches for depth
+	for (let i = 0; i < 100; i++) {
+            const x = Math.random() * 512;
+            const y = Math.random() * 512;
+            const radius = 10 + Math.random() * 20;
+            
+            const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+            gradient.addColorStop(0, 'rgba(20, 50, 10, 0.3)');
+            gradient.addColorStop(1, 'rgba(20, 50, 10, 0)');
+            
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fill();
+	}
+	
+	const texture = new THREE.CanvasTexture(canvas);
+	texture.wrapS = THREE.RepeatWrapping;
+	texture.wrapT = THREE.RepeatWrapping;
+	texture.repeat.set(8, 80);  // Repeat pattern for tiling
+	
+	return texture;
     }
     
     createLaneMarkers() {
@@ -604,8 +870,8 @@ class CarGame {
 
     createNightSky() {
 	// Change sky to dark blue/black
-	this.scene.background = new THREE.Color(0x0a0a1a);
-	this.scene.fog = new THREE.Fog(0x1a1a2e, 30, 120);  // CHANGED: Thicker fog, darker color, closer range
+	this.scene.background = new THREE.Color(0x000011); //0x0a0a1a
+	this.scene.fog = new THREE.Fog(0x000011, 1, 2);  // CHANGED: Thicker fog, darker color, closer range
 	
 	// Create starfield - REDUCED
 	const starGeometry = new THREE.BufferGeometry();
@@ -648,17 +914,42 @@ class CarGame {
     }
     
     spawnScenery() {
-	// Trees and bushes along the road - Dense foreground scenery
-	for (let z = -50; z < 300; z += 8) {
-            if (Math.abs(z - 100) > 15) { // Avoid intersection
-		// Left side - mix of trees and bushes (40% bushes now)
+	// Define zones where bridges and intersections will be
+	// const bridgeZones = [
+        //     { start: 170, end: 190 },
+        //     { start: 440, end: 460 }
+	// ];
+	
+	const intersectionZones = [
+            { start: 110, end: 130 },
+            { start: 370, end: 390 }
+	];
+	
+	// Helper function to check if z position conflicts with special zones
+	const isInRestrictedZone = (z) => {
+            // Check bridges
+            // for (let bridge of bridgeZones) {
+	    // 	if (z >= bridge.start && z <= bridge.end) return true;
+            // }
+            // Check intersections
+            for (let intersection of intersectionZones) {
+		if (z >= intersection.start && z <= intersection.end) return true;
+            }
+            // Check original island intersection
+            if (Math.abs(z - 100) < 15) return true;
+            
+            return false;
+	};
+	
+	// Trees and bushes along the road - with zone checking
+	for (let z = -50; z < 300; z += 12) {
+            if (!isInRestrictedZone(z)) {  // ADDED CHECK
 		if (Math.random() > 0.4) {
                     this.createTree(-10 - Math.random() * 5, z);
 		} else {
                     this.createBush(-10 - Math.random() * 3, z);
 		}
 		
-		// Right side - mix of trees and bushes (40% bushes now)
 		if (Math.random() > 0.4) {
                     this.createTree(10 + Math.random() * 5, z);
 		} else {
@@ -667,71 +958,102 @@ class CarGame {
             }
 	}
 	
-	// Additional bushes near road edge - FIXED: Keep off road
-	for (let z = -50; z < 300; z += 10) {
-            if (Math.random() > 0.3) {
-		this.createBush(-11 - Math.random() * 2, z);  // CHANGED: from -9 to -11 (further from road)
-            }
-            if (Math.random() > 0.3) {
-		this.createBush(11 + Math.random() * 2, z);  // CHANGED: from 9 to 11 (further from road)
-            }
-	}
-
-	// Background trees - Far from road for depth
+	// Additional bushes near road edge - with zone checking
 	for (let z = -50; z < 300; z += 15) {
-            // Far left background
-            if (Math.random() > 0.5) {
-		this.createTree(-20 - Math.random() * 10, z);
-            }
-            // Far right background
-            if (Math.random() > 0.5) {
-		this.createTree(20 + Math.random() * 10, z);
-            }
-	}
-	
-	// Dense bush clusters in far background
-	for (let z = -50; z < 300; z += 12) {
-            // Left background bushes
-            if (Math.random() > 0.4) {
-		this.createBush(-18 - Math.random() * 8, z);
-            }
-            // Right background bushes
-            if (Math.random() > 0.4) {
-		this.createBush(18 + Math.random() * 8, z);
+            if (!isInRestrictedZone(z)) {  // ADDED CHECK
+		if (Math.random() > 0.5) {
+                    this.createBush(-11 - Math.random() * 2, z);
+		}
+		if (Math.random() > 0.5) {
+                    this.createBush(11 + Math.random() * 2, z);
+		}
             }
 	}
 	
-	// Scattered tree groups for variety
-	for (let z = 0; z < 300; z += 30) {
-            // Create small tree clusters
-            const clusterX = (Math.random() > 0.5 ? 1 : -1) * (15 + Math.random() * 10);
-            for (let i = 0; i < 3; i++) {
-		this.createTree(
-                    clusterX + (Math.random() - 0.5) * 5,
-                    z + (Math.random() - 0.5) * 10
-		);
+	// Background trees - with zone checking
+	for (let z = -50; z < 300; z += 25) {
+            if (!isInRestrictedZone(z)) {  // ADDED CHECK
+		if (Math.random() > 0.6) {
+                    this.createTree(-20 - Math.random() * 10, z);
+		}
+		if (Math.random() > 0.6) {
+                    this.createTree(20 + Math.random() * 10, z);
+		}
             }
 	}
 	
-	// Houses - More scattered along the landscape
-	this.createHouse(-15, 30);
-	this.createHouse(15, 150);
-	this.createHouse(-18, 220);
-	this.createHouse(20, 60);
-	this.createHouse(-22, 120);
-	this.createHouse(18, 200);
-	this.createHouse(-16, 270);
-	this.createHouse(22, 50);
+	// Dense bush clusters in far background - with zone checking
+	for (let z = -50; z < 300; z += 20) {
+            if (!isInRestrictedZone(z)) {  // ADDED CHECK
+		if (Math.random() > 0.5) {
+                    this.createBush(-18 - Math.random() * 8, z);
+		}
+		if (Math.random() > 0.5) {
+                    this.createBush(18 + Math.random() * 8, z);
+		}
+            }
+	}
 	
-	// Add some houses with different colors for variety
-	this.createColoredHouse(-20, 180, 0xc9a86a);  // Beige
-	this.createColoredHouse(17, 240, 0xe8d4b0);   // Light tan
-	this.createColoredHouse(-19, 10, 0xb89968);   // Brown
+	// Scattered tree groups - with zone checking
+	for (let z = 0; z < 300; z += 50) {
+            if (!isInRestrictedZone(z)) {  // ADDED CHECK
+		const clusterX = (Math.random() > 0.5 ? 1 : -1) * (15 + Math.random() * 10);
+		for (let i = 0; i < 2; i++) {
+                    this.createTree(
+			clusterX + (Math.random() - 0.5) * 5,
+			z + (Math.random() - 0.5) * 10
+                    );
+		}
+            }
+	}
 	
-	// Police cars on roadside (stationary)
-	this.createPoliceCar(-12, 80);
-	this.createPoliceCar(12, 180);
-	this.createPoliceCar(-12, 250);
+	// Add highway bridges occasionally
+	this.createHighwayBridge(180);
+	this.createHighwayBridge(450);  // Will loop back
+	
+	// Add live traffic intersections
+	this.createLiveIntersection(120);
+	this.createLiveIntersection(380);  // Will loop back
+	
+	// Houses - manually placed to avoid zones
+	const housePositions = [
+            { x: -15, z: 30 },
+            { x: 15, z: 60 },
+            { x: -18, z: 220 },
+            { x: 20, z: 250 },
+            { x: -22, z: 280 }
+	];
+	
+	housePositions.forEach(pos => {
+            if (!isInRestrictedZone(pos.z)) {
+		this.createHouse(pos.x, pos.z);
+            }
+	});
+	
+	// Colored houses - manually placed
+	const coloredHousePositions = [
+            { x: -20, z: 150, color: 0xc9a86a },
+            { x: 17, z: 200, color: 0xe8d4b0 },
+            { x: -19, z: 270, color: 0xb89968 }
+	];
+	
+	coloredHousePositions.forEach(pos => {
+            if (!isInRestrictedZone(pos.z)) {
+		this.createColoredHouse(pos.x, pos.z, pos.color);
+            }
+	});
+	
+	// Police cars - avoid zones
+	const policePositions = [
+            { x: -12, z: 80 },
+            { x: 12, z: 240 }
+	];
+	
+	policePositions.forEach(pos => {
+            if (!isInRestrictedZone(pos.z)) {
+		this.createPoliceCar(pos.x, pos.z);
+            }
+	});
     }
 
     createColoredHouse(x, z, color) {
@@ -1071,6 +1393,33 @@ class CarGame {
 	if (this.stars) {
             this.stars.material.opacity = 0.6 + Math.sin(Date.now() * 0.001) * 0.2;
 	}
+	// Update crossing traffic (cars moving left-right)
+	this.crossingTraffic.forEach(car => {
+            // Move car from left to right
+            car.mesh.position.x += car.speed;
+            
+            // Move with world
+            car.mesh.position.z -= worldSpeed;
+            
+            // Reset when car goes off screen right
+            if (car.mesh.position.x > 50) {
+		car.mesh.position.x = -40;
+            }
+            
+            // Respawn when goes behind player
+            if (car.mesh.position.z < -50) {
+		car.mesh.position.z += 350;
+            }
+            
+            // Collision detection with player
+            const dx = this.playerCar.position.x - car.mesh.position.x;
+            const dz = this.playerCar.position.z - car.mesh.position.z;
+            const distance = Math.sqrt(dx * dx + dz * dz);
+            
+            if (distance < 3) {
+		this.endGame();
+            }
+	});
     }
     
     endGame() {

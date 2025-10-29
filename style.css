@@ -1,6 +1,7 @@
 body{
     padding: 0px;
     margin: 0px;
+    color:white;
 }
 #game-container{
     position: relative;

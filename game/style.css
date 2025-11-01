@@ -1,0 +1,115 @@
+body{
+    padding: 0px;
+    margin: 0px;
+    color:white;
+}
+#game-container{
+    position: relative;
+}
+.menu{
+    position: absolute;
+}
+
+/* Add these new styles */
+#rewind-bar {
+    margin-top: 10px;
+}
+
+#rewind-bar-container {
+    width: 200px;
+    height: 25px;
+    background: rgba(0, 0, 0, 0.7);
+    border: 2px solid #fff;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-top: 5px;
+}
+
+#rewind-bar-fill {
+    height: 100%;
+    background: linear-gradient(to right, #ff4444, #ffaa00, #00ff00);
+    width: 0%;
+    transition: width 0.1s;
+}
+
+#rewind-bar-container {
+    width: 200px;
+    height: 25px;
+    background: rgba(0, 0, 0, 0.7);
+    border: 2px solid #fff;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-top: 5px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+/* Add these new classes */
+#rewind-bar-container.can-rewind {
+    border-color: #00ff00;
+    box-shadow: 0 0 10px #00ff00;
+    animation: pulse 1s infinite;
+}
+
+#rewind-bar-container.cannot-rewind {
+    border-color: #ff0000;
+    box-shadow: 0 0 5px #ff0000;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        box-shadow: 0 0 10px #00ff00;
+    }
+    50% {
+        box-shadow: 0 0 20px #00ff00, 0 0 30px #00ff00;
+    }
+}
+
+#game-over {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.85);  /* Changed from 0.9 to 0.85 for more transparency */
+    color: white;
+    padding: 40px 60px;
+    border-radius: 15px;
+    text-align: center;
+    z-index: 100;
+    backdrop-filter: blur(10px);  /* ADD: Blur effect behind popup */
+    border: 3px solid rgba(255, 68, 68, 0.8);  /* ADD: Red border */
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);  /* ADD: Shadow for depth */
+}
+
+#game-over h1 {
+    margin-bottom: 20px;
+    color: #ff4444;
+    font-size: 48px;
+    text-shadow: 2px 2px 10px rgba(255, 68, 68, 0.5);
+}
+
+#game-over p {
+    margin-bottom: 20px;
+    font-size: 24px;
+}
+
+#restart {
+    background: #4CAF50;
+    color: white;
+    border: none;
+    padding: 15px 40px;
+    font-size: 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+}
+
+#restart:hover {
+    background: #45a049;
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.6);
+}
+
+.hidden {
+    display: none !important;
+}

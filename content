@@ -1,0 +1,3395 @@
+1. src/config/GameConfig.js
+javascript
+
+export const GameConfig = {
+    physics: {
+        maxSpeed: 1.7,
+        acceleration: 0.02,
+        deceleration: 0.03,
+        maxLateralSpeed: 0.1
+    },
+    
+    rewind: {
+        maxPower: 100,
+        chargeRate: 10.5,
+        duration: 15000
+    },
+    
+    camera: {
+        fov: 75,
+        near: 0.1,
+        far: 1000,
+        offsetY: 5,
+        offsetZ: -12
+    },
+    
+    road: {
+        laneWidth: 5,
+        playerLane: 2.25,
+        trafficLane: -2.25,
+        segmentLength: 500
+    },
+    
+    biome: {
+        transitionDistance: 300,
+        transitionZoneLength: 200
+    },
+    
+    rendering: {
+        antialias: true,
+        shadowsEnabled: true
+    }
+};
+
+2. src/utils/Constants.js
+javascript
+
+export const Colors = {
+    ROAD: 0x333333,
+    GRASS_DARK: 0x2d5016,
+    GRASS_MEDIUM: 0x3a7d44,
+    GRASS_LIGHT: 0x4a9d5a,
+    SKY_NIGHT: 0x000011,
+    SKY_FARMLAND: 0x87a96b,
+    PLAYER_CAR: 0xff0000,
+    HEADLIGHT: 0xffffee,
+    STREETLAMP: 0xffffcc
+};
+
+export const RestrictedZones = {
+    intersections: [
+        { start: 110, end: 130 },
+        { start: 290, end: 310 }
+    ]
+};
+
+export const BiomeTypes = {
+    CITY: 'city',
+    FARMLAND: 'farmland'
+};
+
+3. src/utils/Helpers.js
+javascript
+
+import * as THREE from 'three';
+
+export class Helpers {
+    static isInRestrictedZone(x, z, zones) {
+        const normalizedZ = ((z % 350) + 350) % 350;
+        
+        for (let zone of zones) {
+            if (normalizedZ >= zone.start && normalizedZ <= zone.end) {
+                if (x >= -45 && x <= 45) return true;
+            }
+        }
+        return false;
+    }
+    
+    static createGradientTexture(colors, size = 512) {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        
+        const gradient = ctx.createRadialGradient(
+            size/2, size/2, 0, 
+            size/2, size/2, size/2
+        );
+        
+        colors.forEach(({ stop, color }) => {
+            gradient.addColorStop(stop, color);
+        });
+        
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, size, size);
+        
+        return new THREE.CanvasTexture(canvas);
+    }
+    
+    static lerpColor(color1, color2, t) {
+        return new THREE.Color(color1).lerp(new THREE.Color(color2), t);
+    }
+}
+
+4. src/utils/MeshFactory.js
+javascript
+
+import * as THREE from 'three';
+
+export class MeshFactory {
+    static createBox(width, height, depth, color) {
+        const geometry = new THREE.BoxGeometry(width, height, depth);
+        const material = new THREE.MeshLambertMaterial({ color });
+        return new THREE.Mesh(geometry, material);
+    }
+    
+    static createCylinder(radiusTop, radiusBottom, height, color, segments = 8) {
+        const geometry = new THREE.CylinderGeometry(
+            radiusTop, radiusBottom, height, segments
+        );
+        const material = new THREE.MeshLambertMaterial({ color });
+        return new THREE.Mesh(geometry, material);
+    }
+    
+    static createSphere(radius, color, segments = 8) {
+        const geometry = new THREE.SphereGeometry(radius, segments, segments);
+        const material = new THREE.MeshLambertMaterial({ color });
+        return new THREE.Mesh(geometry, material);
+    }
+    
+    static createEmissiveSphere(radius, color, intensity = 1) {
+        const geometry = new THREE.SphereGeometry(radius, 8, 8);
+        const material = new THREE.MeshBasicMaterial({
+            color,
+            emissive: color,
+            emissiveIntensity: intensity
+        });
+        return new THREE.Mesh(geometry, material);
+    }
+}
+
+5. src/systems/InputHandler.js
+javascript
+
+export class InputHandler {
+    constructor() {
+        this.keys = {};
+        this.noclipMode = false;
+        this.setupEventListeners();
+    }
+    
+    setupEventListeners() {
+        window.addEventListener('keydown', (e) => {
+            this.keys[e.key.toLowerCase()] = true;
+            
+            if (e.code === 'KeyN') {
+                this.noclipMode = !this.noclipMode;
+                console.log(`Noclip mode: ${this.noclipMode ? 'ON' : 'OFF'}`);
+            }
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            this.keys[e.key.toLowerCase()] = false;
+        });
+    }
+    
+    isKeyPressed(key) {
+        return this.keys[key.toLowerCase()] || false;
+    }
+    
+    getInputState() {
+        return {
+            forward: this.isKeyPressed('w') || this.isKeyPressed('arrowup') || this.isKeyPressed(' '),
+            backward: this.isKeyPressed('s') || this.isKeyPressed('arrowdown'),
+            left: this.isKeyPressed('a') || this.isKeyPressed('arrowleft'),
+            right: this.isKeyPressed('d') || this.isKeyPressed('arrowright'),
+            noclip: this.noclipMode
+        };
+    }
+    
+    cleanup() {
+        window.removeEventListener('keydown', this.handleKeyDown);
+        window.removeEventListener('keyup', this.handleKeyUp);
+    }
+}
+
+6. src/systems/CollisionDetector.js
+javascript
+
+export class CollisionDetector {
+    checkCarCollision(car1, car2, threshold = 3) {
+        const dx = car1.position.x - car2.position.x;
+        const dz = car1.position.z - car2.position.z;
+        const distance = Math.sqrt(dx * dx + dz * dz);
+        return distance < threshold;
+    }
+    
+    checkPotholeCollision(playerCar, potholes) {
+        for (const pothole of potholes) {
+            const dx = playerCar.position.x - pothole.mesh.position.x;
+            const dz = playerCar.position.z - pothole.mesh.position.z;
+            const distance = Math.sqrt(dx * dx + dz * dz);
+            
+            if (distance < pothole.radius + 1 && !pothole.hitRecently) {
+                return pothole;
+            }
+        }
+        return null;
+    }
+    
+    checkTrafficCollisions(playerCar, trafficCars) {
+        for (const car of trafficCars) {
+            if (this.checkCarCollision(playerCar, car.mesh)) {
+                return car;
+            }
+        }
+        return null;
+    }
+}
+
+7. src/systems/UIManager.js
+javascript
+
+export class UIManager {
+    constructor() {
+        this.elements = {
+            speed: document.getElementById('speed'),
+            distance: document.getElementById('distance'),
+            rewindPower: document.getElementById('rewind-power'),
+            rewindBarFill: document.getElementById('rewind-bar-fill'),
+            rewindBarContainer: document.getElementById('rewind-bar-container'),
+            fps: document.getElementById('fps'),
+            gameOver: document.getElementById('game-over'),
+            finalDistance: document.getElementById('final-distance')
+        };
+        
+        this.fpsCounter = { count: 0, lastTime: performance.now(), fps: 0 };
+    }
+    
+    updateSpeed(speed) {
+        this.elements.speed.textContent = `Speed: ${Math.round(speed * 50)} km/h`;
+    }
+    
+    updateDistance(distance) {
+        this.elements.distance.textContent = `Distance: ${Math.round(distance)} m`;
+    }
+    
+    updateRewindPower(power, canRewind) {
+        this.elements.rewindPower.textContent = Math.round(power);
+        this.elements.rewindBarFill.style.width = power + '%';
+        
+        if (canRewind) {
+            this.elements.rewindBarContainer.classList.add('can-rewind');
+            this.elements.rewindBarContainer.classList.remove('cannot-rewind');
+        } else {
+            this.elements.rewindBarContainer.classList.add('cannot-rewind');
+            this.elements.rewindBarContainer.classList.remove('can-rewind');
+        }
+    }
+    
+    updateFPS() {
+        this.fpsCounter.count++;
+        const now = performance.now();
+        
+        if (now >= this.fpsCounter.lastTime + 1000) {
+            this.fpsCounter.fps = this.fpsCounter.count;
+            this.fpsCounter.count = 0;
+            this.fpsCounter.lastTime = now;
+            this.elements.fps.textContent = `FPS: ${this.fpsCounter.fps}`;
+        }
+    }
+    
+    showGameOver(distance) {
+        this.elements.finalDistance.textContent = Math.round(distance);
+        this.elements.gameOver.classList.remove('hidden');
+    }
+    
+    flashSpeedIndicator(color = '#ff0000', duration = 500) {
+        this.elements.speed.style.color = color;
+        setTimeout(() => {
+            this.elements.speed.style.color = 'white';
+        }, duration);
+    }
+    
+    showNotification(text, duration = 4000) {
+        const notification = document.createElement('div');
+        notification.textContent = text;
+        Object.assign(notification.style, {
+            position: 'fixed',
+            top: '20%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            fontSize: '32px',
+            fontWeight: 'bold',
+            color: '#ffffff',
+            textShadow: '0 0 20px rgba(0,0,0,0.8)',
+            zIndex: '100',
+            pointerEvents: 'none',
+            background: 'rgba(0,0,0,0.5)',
+            padding: '15px 30px',
+            borderRadius: '10px'
+        });
+        
+        document.body.appendChild(notification);
+        setTimeout(() => notification.remove(), duration);
+    }
+}
+
+8. src/systems/CameraController.js
+javascript
+
+import { GameConfig } from '../config/GameConfig.js';
+
+export class CameraController {
+    constructor(camera) {
+        this.camera = camera;
+        this.shakeOffset = { x: 0, y: 0, z: 0 };
+        this.isShaking = false;
+        this.shakeIntensity = 0;
+        this.shakeDuration = 0;
+        this.shakeStartTime = 0;
+    }
+    
+    follow(target) {
+        const baseX = target.position.x;
+        const baseY = GameConfig.camera.offsetY;
+        const baseZ = target.position.z + GameConfig.camera.offsetZ;
+        
+        this.camera.position.x = baseX + this.shakeOffset.x;
+        this.camera.position.y = baseY + this.shakeOffset.y;
+        this.camera.position.z = baseZ + this.shakeOffset.z;
+        
+        this.camera.lookAt(
+            target.position.x + this.shakeOffset.x * 0.5,
+            0,
+            target.position.z + 10
+        );
+    }
+    
+    startShake(intensity, duration) {
+        this.isShaking = true;
+        this.shakeIntensity = intensity;
+        this.shakeDuration = duration;
+        this.shakeStartTime = Date.now();
+    }
+    
+    update() {
+        if (!this.isShaking) return;
+        
+        const elapsed = Date.now() - this.shakeStartTime;
+        
+        if (elapsed >= this.shakeDuration) {
+            this.isShaking = false;
+            this.shakeOffset = { x: 0, y: 0, z: 0 };
+            return;
+        }
+        
+        const progress = elapsed / this.shakeDuration;
+        const currentIntensity = this.shakeIntensity * (1 - progress);
+        
+        this.shakeOffset = {
+            x: (Math.random() - 0.5) * currentIntensity,
+            y: (Math.random() - 0.5) * currentIntensity,
+            z: (Math.random() - 0.5) * currentIntensity * 0.5
+        };
+    }
+    
+    onWindowResize(width, height) {
+        this.camera.aspect = width / height;
+        this.camera.updateProjectionMatrix();
+    }
+}
+
+9. src/entities/PlayerCar.js
+javascript
+
+import * as THREE from 'three';
+import { MeshFactory } from '../utils/MeshFactory.js';
+import { Colors } from '../utils/Constants.js';
+import { GameConfig } from '../config/GameConfig.js';
+
+export class PlayerCar {
+    constructor(scene) {
+        this.scene = scene;
+        this.group = new THREE.Group();
+        
+        // Physics properties
+        this.speed = 0;
+        this.lateralSpeed = 0;
+        this.isMoving = false;
+        this.isRewinding = false;
+        
+        // Rewind properties
+        this.rewindPower = 0;
+        this.rewindTimer = 0;
+        
+        this.createCar();
+        this.createHeadlights();
+        
+        this.group.position.set(
+            GameConfig.road.playerLane * GameConfig.road.laneWidth,
+            0,
+            0
+        );
+        
+        scene.add(this.group);
+    }
+    
+    createCar() {
+        // Body
+        const body = MeshFactory.createBox(2, 1, 4, Colors.PLAYER_CAR);
+        body.position.y = 0.5;
+        body.castShadow = true;
+        this.group.add(body);
+        
+        // Roof
+        const roof = MeshFactory.createBox(1.6, 0.8, 2, 0xcc0000);
+        roof.position.set(0, 1.4, -0.3);
+        roof.castShadow = true;
+        this.group.add(roof);
+        
+        // Headlights
+        const headlightGeometry = new THREE.BoxGeometry(0.2, 0.1, 1.2);
+        const headlightMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffffcc,
+            emissive: 0xffffcc,
+            emissiveIntensity: 2
+        });
+        
+        // Taillights
+        const taillightMaterial = new THREE.MeshStandardMaterial({
+            color: 0xff3333,
+            emissive: 0xff3333,
+            emissiveIntensity: 1
+        });
+        
+        const tailGeometry = new THREE.BoxGeometry(1, 0.01, 0.5);
+        const centerTaillight = new THREE.Mesh(tailGeometry, taillightMaterial);
+        centerTaillight.position.set(0, 0.8, -1.9);
+        this.group.add(centerTaillight);
+        
+        const taillight1 = new THREE.Mesh(headlightGeometry, taillightMaterial);
+        taillight1.position.set(-0.8, 0.8, -1.9);
+        this.group.add(taillight1);
+        
+        const taillight2 = new THREE.Mesh(headlightGeometry, taillightMaterial);
+        taillight2.position.set(0.8, 0.8, -1.9);
+        this.group.add(taillight2);
+        
+        // Wheels
+        this.createWheels();
+    }
+    
+    createWheels() {
+        const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
+        const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
+        
+        const positions = [
+            [-1.1, 0.4, 1.3],
+            [1.1, 0.4, 1.3],
+            [-1.1, 0.4, -1.3],
+            [1.1, 0.4, -1.3]
+        ];
+        
+        positions.forEach(pos => {
+            const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+            wheel.rotation.z = Math.PI / 2;
+            wheel.position.set(...pos);
+            wheel.castShadow = true;
+            this.group.add(wheel);
+        });
+    }
+    
+    createHeadlights() {
+        // Spotlights
+        const headlight1 = new THREE.SpotLight(Colors.HEADLIGHT, 1.5, 30, Math.PI / 6, 0.5);
+        headlight1.position.set(-0.7, 1, 2);
+        headlight1.target.position.set(-0.7, 0, 10);
+        this.group.add(headlight1);
+        this.group.add(headlight1.target);
+        
+        // Beam visualization
+        this.createHeadlightBeam();
+    }
+    
+    createHeadlightBeam() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        
+        const gradient = ctx.createRadialGradient(256, 512, 0, 256, 300, 450);
+        gradient.addColorStop(0, 'rgba(255, 255, 230, 0)');
+        gradient.addColorStop(0.2, 'rgba(255, 255, 220, 0.1)');
+        gradient.addColorStop(0.4, 'rgba(255, 255, 200, 0.3)');
+        gradient.addColorStop(0.6, 'rgba(255, 255, 180, 0.5)');
+        gradient.addColorStop(0.8, 'rgba(255, 255, 160, 0.75)');
+        gradient.addColorStop(1, 'rgba(255, 255, 150, 1)');
+        
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 512, 512);
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        const beamGeometry = this.createBeamGeometry(12, Math.PI * 0.2);
+        const beamMaterial = new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: true,
+            opacity: 0.4,
+            side: THREE.DoubleSide,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        
+        const beam = new THREE.Mesh(beamGeometry, beamMaterial);
+        beam.position.set(0, 0.1, 2);
+        this.group.add(beam);
+    }
+    
+    createBeamGeometry(radius, angle) {
+        const segments = 32;
+        const vertices = [0, 0, 0];
+        const uvs = [0.5, 1.0];
+        const indices = [];
+        
+        for (let i = 0; i <= segments; i++) {
+            const theta = -angle / 2 + (angle / segments) * i;
+            const x = Math.sin(theta) * radius;
+            const z = Math.cos(theta) * radius;
+            
+            vertices.push(x, 0, z);
+            uvs.push(0.5 + Math.sin(theta) * 0.5, 0.5 - Math.cos(theta) * 0.5);
+        }
+        
+        for (let i = 0; i < segments; i++) {
+            indices.push(0, i + 1, i + 2);
+        }
+        
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
+        geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
+        geometry.setIndex(indices);
+        geometry.computeVertexNormals();
+        
+        return geometry;
+    }
+    
+    handleInput(input) {
+        const config = GameConfig.physics;
+        
+        if (input.forward) {
+            if (!this.isMoving || this.rewindPower < 90) {
+                this.isRewinding = true;
+                this.rewindPower = Math.min(
+                    this.rewindPower + GameConfig.rewind.chargeRate,
+                    GameConfig.rewind.maxPower
+                );
+            }
+        } else {
+            if (this.isRewinding && this.rewindPower > 0) {
+                this.isMoving = true;
+                this.rewindTimer = GameConfig.rewind.duration;
+                this.speed = config.maxSpeed * (this.rewindPower / GameConfig.rewind.maxPower);
+            }
+            this.isRewinding = false;
+        }
+        
+        // Braking
+        if (input.backward && this.isMoving) {
+            this.speed = Math.max(this.speed - config.deceleration * 2, 0);
+            const speedRatio = this.speed / config.maxSpeed;
+            this.rewindPower = GameConfig.rewind.maxPower * speedRatio;
+            
+            if (this.speed === 0) {
+                this.isMoving = false;
+                this.rewindPower = 0;
+                this.rewindTimer = 0;
+            }
+        }
+        
+        // Auto-deceleration
+        if (this.isMoving && !input.backward && !input.forward) {
+            this.rewindTimer -= 16.67;
+            
+            if (this.rewindTimer <= 0) {
+                this.isMoving = false;
+                this.rewindPower = 0;
+                this.speed = 0;
+            } else {
+                const timeRatio = this.rewindTimer / GameConfig.rewind.duration;
+                this.speed *= 0.998;
+                this.rewindPower *= timeRatio;
+            }
+        }
+        
+        // Steering
+        if (input.left) {
+            this.lateralSpeed = Math.min(this.lateralSpeed + 0.005, config.maxLateralSpeed);
+        } else if (input.right) {
+            this.lateralSpeed = Math.max(this.lateralSpeed - 0.005, -config.maxLateralSpeed);
+        } else {
+            this.lateralSpeed *= 0.9;
+        }
+        
+        this.group.position.x += this.lateralSpeed;
+        this.group.position.x = Math.max(-8, Math.min(8, this.group.position.x));
+    }
+    
+    onPotholeHit() {
+        this.speed *= 0.3;
+        this.rewindPower *= 0.5;
+    }
+    
+    get position() {
+        return this.group.position;
+    }
+}
+
+10. src/core/Game.js (Main orchestrator)
+javascript
+
+import * as THREE from 'three';
+import { GameConfig } from '../config/GameConfig.js';
+import { SceneManager } from './SceneManager.js';
+import { Renderer } from './Renderer.js';
+import { InputHandler } from '../systems/InputHandler.js';
+import { CollisionDetector } from '../systems/CollisionDetector.js';
+import { CameraController } from '../systems/CameraController.js';
+import { UIManager } from '../systems/UIManager.js';
+import { PlayerCar } from '../entities/PlayerCar.js';
+import { Road } from '../environment/Road.js';
+import { BiomeManager } from '../environment/BiomeManager.js';
+import { TrafficManager } from '../entities/TrafficManager.js';
+
+export class Game {
+    constructor() {
+        this.gameOver = false;
+        this.distance = 0;
+        
+        this.init();
+    }
+    
+    init() {
+        // Core systems
+        this.sceneManager = new SceneManager();
+        this.renderer = new Renderer();
+        this.inputHandler = new InputHandler();
+        this.collisionDetector = new CollisionDetector();
+        this.uiManager = new UIManager();
+        
+        // Camera
+        this.cameraController = new CameraController(this.sceneManager.camera);
+        
+        // Game entities
+        this.playerCar = new PlayerCar(this.sceneManager.scene);
+        this.road = new Road(this.sceneManager.scene);
+        this.trafficManager = new TrafficManager(this.sceneManager.scene);
+        this.biomeManager = new BiomeManager(this.sceneManager.scene);
+        
+        // Event listeners
+        this.setupEventListeners();
+        
+        // Start game loop
+        this.gameLoop();
+    }
+    
+    setupEventListeners() {
+        window.addEventListener('resize', () => this.onWindowResize());
+        document.getElementById('restart').addEventListener('click', () => this.restart());
+    }
+    
+    update() {
+        if (this.gameOver) return;
+        
+        const input = this.inputHandler.getInputState();
+        
+        if (input.noclip) {
+            this.handleNoclipMovement(input);
+            return;
+        }
+        
+        // Update player
+        this.playerCar.handleInput(input);
+        
+        // Update distance
+        this.distance += this.playerCar.speed;
+        
+        // Update world
+        this.road.update(this.playerCar.speed);
+        this.trafficManager.update(this.playerCar.speed, this.playerCar.position);
+        this.biomeManager.update(this.distance, this.playerCar.speed);
+        
+        // Update camera
+        this.cameraController.update();
+        this.cameraController.follow(this.playerCar.group);
+        
+        // Collision detection
+        this.checkCollisions();
+        
+        // Update UI
+        this.updateUI();
+    }
+    
+    checkCollisions() {
+        // Traffic collisions
+        const trafficCollision = this.collisionDetector.checkTrafficCollisions(
+            this.playerCar.group,
+            this.trafficManager.getAllCars()
+        );
+        
+        if (trafficCollision) {
+            this.endGame();
+        }
+        
+        // Pothole collisions
+        const potholeHit = this.collisionDetector.checkPotholeCollision(
+            this.playerCar.group,
+            this.road.potholes
+        );
+        
+        if (potholeHit) {
+            this.playerCar.onPotholeHit();
+            this.uiManager.flashSpeedIndicator('#ff0000', 500);
+            this.cameraController.startShake(0.5, 300);
+            potholeHit.hitRecently = true;
+            setTimeout(() => potholeHit.hitRecently = false, 1000);
+        }
+    }
+    
+    updateUI() {
+        this.uiManager.updateSpeed(this.playerCar.speed);
+        this.uiManager.updateDistance(this.distance);
+        this.uiManager.updateRewindPower(
+            this.playerCar.rewindPower,
+            !this.playerCar.isMoving || this.playerCar.rewindPower < 90
+        );
+        this.uiManager.updateFPS();
+    }
+    
+    handleNoclipMovement(input) {
+        const camera = this.sceneManager.camera;
+        if (input.forward) camera.position.z += 5;
+        if (input.backward) camera.position.z -= 5;
+        if (input.left) camera.position.x += 0.5;
+        if (input.right) camera.position.x -= 0.5;
+    }
+    
+    render() {
+        this.renderer.render(this.sceneManager.scene, this.sceneManager.camera);
+    }
+    
+    gameLoop() {
+        requestAnimationFrame(() => this.gameLoop());
+        this.update();
+        this.render();
+    }
+    
+    endGame() {
+        this.gameOver = true;
+        this.uiManager.showGameOver(this.distance);
+    }
+    
+    restart() {
+        window.location.reload();
+    }
+    
+    onWindowResize() {
+        this.cameraController.onWindowResize(window.innerWidth, window.innerHeight);
+        this.renderer.onWindowResize(window.innerWidth, window.innerHeight);
+    }
+}
+
+11. src/index.js (Entry point)
+javascript
+
+import { Game } from './core/Game.js';
+
+// Start the game when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    const game = new Game();
+    
+    // Expose game instance for debugging
+    window.game = game;
+});
+
+12. Update HTML to use modules
+bash
+
+# Create or update index.html
+cat > index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-
+
+Continue
+html
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Car Racing Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container"></div>
+    
+    <div id="ui">
+        <div id="speed">Speed: 0 km/h</div>
+        <div id="distance">Distance: 0 m</div>
+        <div id="fps">FPS: 0</div>
+        <div id="rewind-container">
+            <div id="rewind-label">Rewind Power</div>
+            <div id="rewind-bar-container">
+                <div id="rewind-bar-fill"></div>
+            </div>
+            <div id="rewind-power">0</div>
+        </div>
+    </div>
+    
+    <div id="game-over" class="hidden">
+        <h1>Game Over</h1>
+        <p>Distance: <span id="final-distance">0</span>m</p>
+        <button id="restart">Restart</button>
+    </div>
+    
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+        }
+    }
+    </script>
+    <script type="module" src="src/index.js"></script>
+</body>
+</html>
+EOF
+
+13. Additional Component Files
+
+src/core/SceneManager.js
+javascript
+
+import * as THREE from 'three';
+import { GameConfig } from '../config/GameConfig.js';
+
+export class SceneManager {
+    constructor() {
+        this.scene = new THREE.Scene();
+        this.camera = this.createCamera();
+        this.setupLighting();
+    }
+    
+    createCamera() {
+        const camera = new THREE.PerspectiveCamera(
+            GameConfig.camera.fov,
+            window.innerWidth / window.innerHeight,
+            GameConfig.camera.near,
+            GameConfig.camera.far
+        );
+        camera.position.set(0, 5, -10);
+        camera.lookAt(0, 0, 0);
+        return camera;
+    }
+    
+    setupLighting() {
+        const ambientLight = new THREE.AmbientLight(0x404060, 0.4);
+        this.scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0x8888bb, 0.5);
+        directionalLight.position.set(10, 20, 10);
+        directionalLight.castShadow = true;
+        this.scene.add(directionalLight);
+    }
+}
+
+src/core/Renderer.js
+javascript
+
+import * as THREE from 'three';
+import { GameConfig } from '../config/GameConfig.js';
+
+export class Renderer {
+    constructor() {
+        this.renderer = new THREE.WebGLRenderer({ 
+            antialias: GameConfig.rendering.antialias 
+        });
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.shadowMap.enabled = GameConfig.rendering.shadowsEnabled;
+        
+        const container = document.getElementById('game-container');
+        container.appendChild(this.renderer.domElement);
+    }
+    
+    render(scene, camera) {
+        this.renderer.render(scene, camera);
+    }
+    
+    onWindowResize(width, height) {
+        this.renderer.setSize(width, height);
+    }
+}
+
+src/environment/Road.js
+javascript
+
+import * as THREE from 'three';
+import { GameConfig } from '../config/GameConfig.js';
+import { Colors, RestrictedZones } from '../utils/Constants.js';
+import { Pothole } from './objects/Pothole.js';
+
+export class Road {
+    constructor(scene) {
+        this.scene = scene;
+        this.segments = [];
+        this.dividers = [];
+        this.fences = [];
+        this.potholes = [];
+        this.markers = [];
+        
+        this.createRoad();
+        this.createLaneMarkers();
+        this.createDividers();
+        this.createFences();
+        this.createEdgeStrips();
+        // this.spawnPotholes();
+    }
+    
+    createRoad() {
+        const roadGeometry = new THREE.PlaneGeometry(18, 500);
+        const roadMaterial = new THREE.MeshLambertMaterial({ color: Colors.ROAD });
+        
+        for (let i = 0; i < 3; i++) {
+            const road = new THREE.Mesh(roadGeometry, roadMaterial);
+            road.rotation.x = -Math.PI / 2;
+            road.position.z = i * 500 - 500;
+            road.receiveShadow = false;
+            this.scene.add(road);
+            this.segments.push(road);
+        }
+        
+        this.createGrass();
+    }
+    
+    createGrass() {
+        const grassTexture = this.createGrassTexture();
+        const grassPatches = [
+            { x: -34, color: Colors.GRASS_MEDIUM },
+            { x: -34, color: Colors.GRASS_DARK },
+            { x: -34, color: Colors.GRASS_LIGHT },
+            { x: 34, color: Colors.GRASS_MEDIUM },
+            { x: 34, color: Colors.GRASS_DARK },
+            { x: 34, color: Colors.GRASS_LIGHT }
+        ];
+        
+        grassPatches.forEach((patch, index) => {
+            const grassGeometry = new THREE.PlaneGeometry(50, 500);
+            const grassMaterial = new THREE.MeshLambertMaterial({
+                map: grassTexture,
+                color: patch.color
+            });
+            
+            const grass = new THREE.Mesh(grassGeometry, grassMaterial);
+            grass.rotation.x = -Math.PI / 2;
+            grass.position.x = patch.x;
+            grass.position.z = (index % 3) * 166 - 166;
+            grass.receiveShadow = false;
+            this.scene.add(grass);
+        });
+    }
+    
+    createGrassTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        
+        ctx.fillStyle = '#2d5016';
+        ctx.fillRect(0, 0, 512, 512);
+        
+        for (let i = 0; i < 15000; i++) {
+            const x = Math.random() * 512;
+            const y = Math.random() * 512;
+            const shade = Math.random() * 60;
+            const greenValue = 80 + shade;
+            const blueValue = 20 + Math.random() * 30;
+            
+            ctx.fillStyle = `rgb(${Math.random() * 40}, ${greenValue}, ${blueValue})`;
+            const size = Math.random() < 0.7 ? 1 : 2;
+            ctx.fillRect(x, y, size, size);
+        }
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(8, 80);
+        
+        return texture;
+    }
+    
+    createLaneMarkers() {
+        const markerGeometry = new THREE.BoxGeometry(0.3, 0.1, 3);
+        const markerMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
+        const markerPositions = [-4.5, 4.5];
+        
+        for (let z = -600; z < 600; z += 10) {
+            markerPositions.forEach(x => {
+                const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+                marker.position.set(x, 0, z);
+                this.scene.add(marker);
+                this.markers.push(marker);
+            });
+        }
+    }
+    
+    createDividers() {
+        for (let baseOffset = 0; baseOffset < 3; baseOffset++) {
+            const baseZ = baseOffset * 500 - 500;
+            let segmentStart = null;
+            
+            for (let localZ = -250; localZ <= 250; localZ += 10) {
+                const absoluteZ = baseZ + localZ;
+                const inZone = this.isInRestrictedZone(0, absoluteZ);
+                
+                if (!inZone && segmentStart === null) {
+                    segmentStart = localZ;
+                } else if (inZone && segmentStart !== null) {
+                    const divider = this.createDividerSegment(segmentStart, localZ - 10);
+                    divider.position.set(0, 0, baseZ);
+                    this.scene.add(divider);
+                    this.dividers.push(divider);
+                    segmentStart = null;
+                } else if (localZ === 250 && segmentStart !== null) {
+                    const divider = this.createDividerSegment(segmentStart, localZ);
+                    divider.position.set(0, 0, baseZ);
+                    this.scene.add(divider);
+                    this.dividers.push(divider);
+                    segmentStart = null;
+                }
+            }
+        }
+    }
+    
+    createDividerSegment(startZ, endZ) {
+        const dividerGroup = new THREE.Group();
+        const length = endZ - startZ;
+        
+        if (length < 10) return dividerGroup;
+        
+        const barrierShape = new THREE.Shape();
+        barrierShape.moveTo(-0.3, 0);
+        barrierShape.lineTo(-0.2, 0.5);
+        barrierShape.lineTo(-0.2, 0.7);
+        barrierShape.lineTo(0.2, 0.7);
+        barrierShape.lineTo(0.2, 0.5);
+        barrierShape.lineTo(0.3, 0);
+        barrierShape.lineTo(-0.3, 0);
+        
+        const extrudeSettings = { steps: 1, depth: length, bevelEnabled: false };
+        const barrierGeometry = new THREE.ExtrudeGeometry(barrierShape, extrudeSettings);
+        const barrierMaterial = new THREE.MeshLambertMaterial({ color: 0xcccccc });
+        const barrier = new THREE.Mesh(barrierGeometry, barrierMaterial);
+        barrier.rotation.x = Math.PI / 2;
+        barrier.position.set(0, 0, startZ);
+        dividerGroup.add(barrier);
+        
+        for (let z = startZ; z < endZ; z += 15) {
+            const reflectorColor = Math.floor(z / 15) % 2 === 0 ? 0xff0000 : 0xffaa00;
+            const reflector = new THREE.Mesh(
+                new THREE.SphereGeometry(0.08, 8, 8),
+                new THREE.MeshBasicMaterial({
+                    color: reflectorColor,
+                    emissive: reflectorColor,
+                    emissiveIntensity: 0.8
+                })
+            );
+            reflector.position.set(0, 0.75, z);
+            dividerGroup.add(reflector);
+        }
+        
+        return dividerGroup;
+    }
+    
+    createFences() {
+        for (let side of [-1, 1]) {
+            const fenceX = side * 9.5;
+            
+            for (let baseOffset = 0; baseOffset < 3; baseOffset++) {
+                const baseZ = baseOffset * 500 - 500;
+                let segmentStart = null;
+                
+                for (let localZ = -250; localZ <= 250; localZ += 5) {
+                    const absoluteZ = baseZ + localZ;
+                    const inZone = this.isInRestrictedZone(0, absoluteZ);
+                    
+                    if (!inZone && segmentStart === null) {
+                        segmentStart = localZ;
+                    } else if (inZone && segmentStart !== null) {
+                        const fence = this.createFenceSegment(fenceX, segmentStart, localZ - 5);
+                        fence.position.set(0, 0, baseZ);
+                        this.scene.add(fence);
+                        this.fences.push(fence);
+                        segmentStart = null;
+                    } else if (localZ === 250 && segmentStart !== null) {
+                        const fence = this.createFenceSegment(fenceX, segmentStart, localZ);
+                        fence.position.set(0, 0, baseZ);
+                        this.scene.add(fence);
+                        this.fences.push(fence);
+                        segmentStart = null;
+                    }
+                }
+            }
+        }
+    }
+    
+    createFenceSegment(fenceX, startZ, endZ) {
+        const fenceGroup = new THREE.Group();
+        const length = endZ - startZ;
+        const centerZ = (startZ + endZ) / 2;
+        
+        if (length < 5) return fenceGroup;
+        
+        for (let z = startZ; z <= endZ; z += 5) {
+            const postGeometry = new THREE.BoxGeometry(0.15, 1.2, 0.15);
+            const postMaterial = new THREE.MeshLambertMaterial({ color: 0x4a4a4a });
+            const post = new THREE.Mesh(postGeometry, postMaterial);
+            post.position.set(fenceX, 0.6, z);
+            post.castShadow = false;
+            fenceGroup.add(post);
+        }
+        
+        if (length >= 10) {
+            const railPositions = [0.3, 0.6, 0.9];
+            railPositions.forEach(height => {
+                const railGeometry = new THREE.BoxGeometry(0.1, 0.08, length);
+                const railMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
+                const rail = new THREE.Mesh(railGeometry, railMaterial);
+                rail.position.set(fenceX, height, centerZ);
+                fenceGroup.add(rail);
+            });
+        }
+        
+        return fenceGroup;
+    }
+    
+    createEdgeStrips() {
+        [9, -9].forEach(x => {
+            const stripeGeometry = new THREE.BoxGeometry(0.45, 0.08, 500);
+            const stripeMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
+            const stripe = new THREE.Mesh(stripeGeometry, stripeMaterial);
+            stripe.position.set(x, 0, 0);
+            this.scene.add(stripe);
+        });
+    }
+    
+    spawnPotholes() {
+        const positions = [
+            { x: -4, z: 40 }, { x: 3, z: 70 },
+            { x: -5, z: 140 }, { x: 2, z: 200 },
+            { x: -3, z: 260 }, { x: 4, z: 290 }
+        ];
+        
+        positions.forEach(pos => {
+            if (!this.isInRestrictedZone(pos.x, pos.z)) {
+                const pothole = new Pothole(this.scene, pos.x, pos.z);
+                this.potholes.push(pothole);
+            }
+        });
+    }
+    
+    isInRestrictedZone(x, z) {
+        const normalizedZ = ((z % 350) + 350) % 350;
+        
+        for (let zone of RestrictedZones.intersections) {
+            if (normalizedZ >= zone.start && normalizedZ <= zone.end) {
+                if (x >= -45 && x <= 45) return true;
+            }
+        }
+        return false;
+    }
+    
+    update(worldSpeed) {
+        this.segments.forEach(segment => {
+            segment.position.z -= worldSpeed;
+            if (segment.position.z < -500) {
+                segment.position.z += 1500;
+            }
+        });
+        
+        this.dividers.forEach(divider => {
+            divider.position.z -= worldSpeed;
+            if (divider.position.z < -50) {
+                divider.position.z += 350;
+            }
+        });
+        
+        this.fences.forEach(fence => {
+            fence.position.z -= worldSpeed;
+            if (fence.position.z < -50) {
+                fence.position.z += 350;
+            }
+        });
+        
+        this.potholes.forEach(pothole => {
+            pothole.update(worldSpeed);
+        });
+    }
+}
+
+src/entities/TrafficManager.js
+javascript
+
+import { TrafficCar } from './TrafficCar.js';
+import { CrossingTraffic } from './CrossingTraffic.js';
+
+export class TrafficManager {
+    constructor(scene) {
+        this.scene = scene;
+        this.trafficCars = [];
+        this.crossingCars = [];
+        
+        this.spawnTraffic();
+        this.spawnCrossingTraffic();
+    }
+    
+    spawnTraffic() {
+        for (let i = 0; i < 5; i++) {
+            this.trafficCars.push(new TrafficCar(this.scene, 50 + i * 40, -2.25));
+            this.trafficCars.push(new TrafficCar(this.scene, 70 + i * 40, -6.75));
+        }
+    }
+    
+    spawnCrossingTraffic() {
+        const intersectionPositions = [120, 300];
+        
+        intersectionPositions.forEach(z => {
+            for (let i = 0; i < 5; i++) {
+                this.crossingCars.push(
+                    new CrossingTraffic(this.scene, -50 - i * 20, z)
+                );
+            }
+        });
+    }
+    
+    update(worldSpeed, playerPosition) {
+        this.trafficCars.forEach(car => car.update(worldSpeed));
+        this.crossingCars.forEach(car => car.update(worldSpeed));
+    }
+    
+    getAllCars() {
+        return [
+            ...this.trafficCars.map(car => ({ mesh: car.group })),
+            ...this.crossingCars.map(car => ({ mesh: car.group }))
+        ];
+    }
+}
+
+src/entities/TrafficCar.js
+javascript
+
+import * as THREE from 'three';
+import { MeshFactory } from '../utils/MeshFactory.js';
+
+export class TrafficCar {
+    constructor(scene, z, laneX) {
+        this.scene = scene;
+        this.group = new THREE.Group();
+        this.speed = 0.5 + Math.random() * 0.3;
+        this.lane = laneX;
+        
+        this.createCar();
+        this.group.position.set(laneX, 0, z);
+        scene.add(this.group);
+    }
+    
+    createCar() {
+        const colors = [0x0000ff, 0x00ff00, 0xffff00, 0xff00ff, 0x00ffff];
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        
+        const body = MeshFactory.createBox(2, 1, 4, color);
+        body.position.y = 0.5;
+        body.castShadow = true;
+        this.group.add(body);
+        
+        const roof = MeshFactory.createBox(1.6, 0.8, 2, color);
+        roof.position.set(0, 1.4, -0.3);
+        roof.castShadow = true;
+        this.group.add(roof);
+        
+        this.createWheels();
+        this.createLights();
+    }
+    
+    createWheels() {
+        const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
+        const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
+        const positions = [[-1.1, 0.4, 1.3], [1.1, 0.4, 1.3], [-1.1, 0.4, -1.3], [1.1, 0.4, -1.3]];
+        
+        positions.forEach(pos => {
+            const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+            wheel.rotation.z = Math.PI / 2;
+            wheel.position.set(...pos);
+            wheel.castShadow = true;
+            this.group.add(wheel);
+        });
+    }
+    
+    createLights() {
+        const headlightMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffffcc,
+            emissive: 0xffffcc,
+            emissiveIntensity: 2
+        });
+        
+        const headlight1 = MeshFactory.createSphere(0.2, 0xffffcc);
+        headlight1.position.set(-0.8, 0.8, -1.9);
+        this.group.add(headlight1);
+        
+        const headlight2 = MeshFactory.createSphere(0.2, 0xffffcc);
+        headlight2.position.set(0.8, 0.8, -1.9);
+        this.group.add(headlight2);
+    }
+    
+    update(worldSpeed) {
+        this.group.position.z -= worldSpeed + this.speed;
+        
+        if (this.group.position.z < -30) {
+            this.group.position.z = 250;
+            this.group.position.x = this.lane;
+        }
+    }
+}
+
+Package.json for Development Server
+bash
+
+cat > package.json << 'EOF'
+{
+  "name": "car-racing-game",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  }
+}
+EOF
+
+src/environment/objects/Bush.js
+javascript
+
+import * as THREE from 'three';
+
+export class Bush {
+    constructor(scene, x, z) {
+        this.scene = scene;
+        this.group = new THREE.Group();
+        this.initialZ = z;
+        
+        this.createBush();
+        this.group.position.set(x, 0, z);
+        scene.add(this.group);
+    }
+    
+    createBush() {
+        const bushColors = [0x2d5016, 0x3a7d44, 0x4a9d5a];
+        const bushType = Math.floor(Math.random() * 2);
+        const bushMaterial = new THREE.MeshLambertMaterial({ 
+            color: bushColors[Math.floor(Math.random() * bushColors.length)]
+        });
+        
+        if (bushType === 0) {
+            // Round bush
+            const bushGeometry = new THREE.SphereGeometry(1.2 + Math.random() * 0.6, 8, 8);
+            const bush = new THREE.Mesh(bushGeometry, bushMaterial);
+            bush.position.y = 0.7;
+            bush.scale.y = 0.8;
+            bush.castShadow = true;
+            this.group.add(bush);
+        } else {
+            // Clustered bush
+            const clusterCount = 4 + Math.floor(Math.random() * 3);
+            for (let i = 0; i < clusterCount; i++) {
+                const sphere = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.6 + Math.random() * 0.4, 6, 6),
+                    bushMaterial
+                );
+                sphere.position.set(
+                    (Math.random() - 0.5) * 1.5,
+                    0.4 + Math.random() * 0.4,
+                    (Math.random() - 0.5) * 1.5
+                );
+                sphere.castShadow = true;
+                this.group.add(sphere);
+            }
+        }
+        
+        const scale = 1 + Math.random() * 0.5;
+        this.group.scale.set(scale, scale, scale);
+    }
+    
+    update(worldSpeed) {
+        this.group.position.z -= worldSpeed;
+        if (this.group.position.z < -50) {
+            this.group.position.z += 350;
+        }
+    }
+}
+
+src/environment/objects/Tree.js
+javascript
+
+import * as THREE from 'three';
+
+export class Tree {
+    constructor(scene, x, z) {
+        this.scene = scene;
+        this.group = new THREE.Group();
+        this.initialZ = z;
+        
+        this.createTree();
+        this.group.position.set(x, 0, z);
+        scene.add(this.group);
+    }
+    
+    createTree() {
+        const treeType = Math.floor(Math.random() * 3);
+        const sizeScale = 0.7 + Math.random() * 0.6;
+        
+        // Trunk
+        const trunkHeight = 2.5 + Math.random() * 1.5;
+        const trunkRadius = 0.25 + Math.random() * 0.15;
+        const trunkGeometry = new THREE.CylinderGeometry(
+            trunkRadius, 
+            trunkRadius + 0.1, 
+            trunkHeight, 
+            8
+        );
+        const trunkColors = [0x4a2511, 0x3d1f0f, 0x5c3317];
+        const trunkMaterial = new THREE.MeshLambertMaterial({ 
+            color: trunkColors[Math.floor(Math.random() * trunkColors.length)] 
+        });
+        const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+        trunk.position.y = trunkHeight / 2;
+        trunk.castShadow = true;
+        this.group.add(trunk);
+        
+        // Foliage based on type
+        if (treeType === 0) {
+            // Pine tree
+            const foliageGeometry = new THREE.ConeGeometry(1.2, 3, 8);
+            const foliageMaterial = new THREE.MeshLambertMaterial({ color: 0x1a5c1a });
+            const foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
+            foliage.position.y = trunkHeight + 0.8;
+            foliage.castShadow = true;
+            this.group.add(foliage);
+            
+            const foliage2 = new THREE.Mesh(
+                new THREE.ConeGeometry(1, 2.5, 8),
+                foliageMaterial
+            );
+            foliage2.position.y = trunkHeight + 1.5;
+            foliage2.castShadow = true;
+            this.group.add(foliage2);
+            
+        } else if (treeType === 1) {
+            // Round tree
+            const foliageGeometry = new THREE.SphereGeometry(1.5, 8, 8);
+            const foliageMaterial = new THREE.MeshLambertMaterial({ color: 0x228b22 });
+            const foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
+            foliage.position.y = trunkHeight + 0.3;
+            foliage.castShadow = true;
+            this.group.add(foliage);
+            
+        } else {
+            // Oak tree
+            const foliageMaterial = new THREE.MeshLambertMaterial({ color: 0x2e7d32 });
+            const clusterPositions = [
+                [0, trunkHeight + 0.8, 0, 1.3],
+                [-0.6, trunkHeight + 0.3, 0.4, 0.9],
+                [0.7, trunkHeight + 0.5, -0.3, 1],
+                [0, trunkHeight + 1.3, 0, 0.8]
+            ];
+            
+            clusterPositions.forEach(pos => {
+                const cluster = new THREE.Mesh(
+                    new THREE.SphereGeometry(pos[3], 6, 6),
+                    foliageMaterial
+                );
+                cluster.position.set(pos[0], pos[1], pos[2]);
+                cluster.castShadow = true;
+                this.group.add(cluster);
+            });
+        }
+        
+        this.group.scale.set(sizeScale, sizeScale, sizeScale);
+    }
+    
+    update(worldSpeed) {
+        this.group.position.z -= worldSpeed;
+        if (this.group.position.z < -50) {
+            this.group.position.z += 350;
+        }
+    }
+}
+
+src/environment/objects/House.js
+javascript
+
+import * as THREE from 'three';
+
+export class House {
+    constructor(scene, x, z, color = 0xd2b48c) {
+        this.scene = scene;
+        this.group = new THREE.Group();
+        this.initialZ = z;
+        this.color = color;
+        
+        this.createHouse();
+        this.group.position.set(x, 0, z);
+        scene.add(this.group);
+    }
+    
+    createHouse() {
+        // House body
+        const bodyGeometry = new THREE.BoxGeometry(4, 3, 4);
+        const bodyMaterial = new THREE.MeshLambertMaterial({ color: this.color });
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.position.y = 1.5;
+        body.castShadow = true;
+        this.group.add(body);
+        
+        // Roof
+        const roofGeometry = new THREE.ConeGeometry(3, 2, 4);
+        const roofMaterial = new THREE.MeshLambertMaterial({ color: 0x8b4513 });
+        const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+        roof.position.y = 3.5;
+        roof.rotation.y = Math.PI / 4;
+        roof.castShadow = true;
+        this.group.add(roof);
+        
+        // Door
+        const doorGeometry = new THREE.BoxGeometry(0.8, 1.5, 0.1);
+        const doorMaterial = new THREE.MeshLambertMaterial({ color: 0x4a2511 });
+        const door = new THREE.Mesh(doorGeometry, doorMaterial);
+        door.position.set(0, 0.75, 2.05);
+        this.group.add(door);
+        
+        // Windows
+        const windowGeometry = new THREE.BoxGeometry(0.6, 0.6, 0.1);
+        const windowMaterial = new THREE.MeshLambertMaterial({ color: 0x87ceeb });
+        
+        const window1 = new THREE.Mesh(windowGeometry, windowMaterial);
+        window1.position.set(-1, 1.8, 2.05);
+        this.group.add(window1);
+        
+        const window2 = new THREE.Mesh(windowGeometry, windowMaterial);
+        window2.position.set(1, 1.8, 2.05);
+        this.group.add(window2);
+    }
+    
+    update(worldSpeed) {
+        this.group.position.z -= worldSpeed;
+        if (this.group.position.z < -50) {
+            this.group.position.z += 350;
+        }
+    }
+}
+
+src/environment/objects/Cloud.js
+javascript
+
+import * as THREE from 'three';
+
+export class Cloud {
+    constructor(scene, x, y, z) {
+        this.scene = scene;
+        this.group = new THREE.Group();
+        
+        this.createCloud();
+        this.group.position.set(x, y, z);
+        
+        const scale = 2 + Math.random() * 2;
+        this.group.scale.set(scale, scale, scale);
+        this.group.rotation.y = Math.random() * Math.PI * 2;
+        
+        scene.add(this.group);
+    }
+    
+    createCloud() {
+        const cloudMaterial = new THREE.MeshLambertMaterial({ 
+            color: 0xffffff,
+            opacity: 0.8
+        });
+        
+        const spherePositions = [
+            [0, 0, 0, 2.5],
+            [-2, 0.4, 1, 1.8],
+            [2, 0.2, -0.6, 2],
+            [0.6, 1, 0, 1.5],
+            [-1, -0.4, -1, 1.3]
+        ];
+        
+        spherePositions.forEach(pos => {
+            const geometry = new THREE.SphereGeometry(pos[3], 8, 8);
+            const sphere = new THREE.Mesh(geometry, cloudMaterial);
+            sphere.position.set(pos[0], pos[1], pos[2]);
+            this.group.add(sphere);
+        });
+    }
+    
+    update(worldSpeed) {
+        this.group.position.z -= worldSpeed;
+        if (this.group.position.z < -50) {
+            this.group.position.z += 350;
+        }
+    }
+}
+
+src/environment/objects/Pothole.js
+javascript
+
+import * as THREE from 'three';
+
+export class Pothole {
+    constructor(scene, x, z) {
+        this.scene = scene;
+        this.group = new THREE.Group();
+        this.x = x;
+        this.z = z;
+        this.initialZ = z;
+        this.radius = 1.0;
+        this.warningDistance = 120;
+        this.hitRecently = false;
+        
+        this.createPothole();
+        this.group.position.set(x, 0, z);
+        scene.add(this.group);
+    }
+    
+    createPothole() {
+        // Pothole crater
+        const craterGeometry = new THREE.CircleGeometry(0.8 + Math.random() * 0.4, 16);
+        const craterMaterial = new THREE.MeshLambertMaterial({ 
+            color: 0x1a1a1a,
+            transparent: true,
+            opacity: 0.9
+        });
+        const crater = new THREE.Mesh(craterGeometry, craterMaterial);
+        crater.rotation.x = -Math.PI / 2;
+        crater.position.y = 0.02;
+        this.group.add(crater);
+        
+        // Cracked edges
+        const edgeGeometry = new THREE.RingGeometry(0.8, 1.2, 16);
+        const edgeMaterial = new THREE.MeshLambertMaterial({ 
+            color: 0x2a2a2a,
+            transparent: true,
+            opacity: 0.7
+        });
+        const edge = new THREE.Mesh(edgeGeometry, edgeMaterial);
+        edge.rotation.x = -Math.PI / 2;
+        edge.position.y = 0.03;
+        this.group.add(edge);
+        
+        // Debris
+        for (let i = 0; i < 3; i++) {
+            const debris = new THREE.Mesh(
+                new THREE.BoxGeometry(0.1, 0.05, 0.1),
+                new THREE.MeshLambertMaterial({ color: 0x4a4a4a })
+            );
+            debris.position.set(
+                (Math.random() - 0.5) * 1.5,
+                0.03,
+                (Math.random() - 0.5) * 1.5
+            );
+            debris.rotation.y = Math.random() * Math.PI;
+            this.group.add(debris);
+        }
+        
+        // Warning marker
+        this.warning = this.createWarning();
+        this.group.add(this.warning);
+    }
+    
+    createWarning() {
+        const warningGroup = new THREE.Group();
+        
+        const warningMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xff0000,
+            emissive: 0xff0000,
+            emissiveIntensity: 1
+        });
+        
+        // Exclamation bar
+        const barGeometry = new THREE.BoxGeometry(0.15, 0.8, 0.05);
+        const bar = new THREE.Mesh(barGeometry, warningMaterial);
+        bar.position.y = 0.5;
+        warningGroup.add(bar);
+        
+        // Exclamation dot
+        const dotGeometry = new THREE.BoxGeometry(0.15, 0.15, 0.05);
+        const dot = new THREE.Mesh(dotGeometry, warningMaterial);
+        dot.position.y = 0;
+        warningGroup.add(dot);
+        
+        // Background circle (hidden by default)
+        const bgGeometry = new THREE.CircleGeometry(0, 0);
+        const bgMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xffff00,
+            transparent: true,
+            opacity: 0.8,
+            side: THREE.DoubleSide
+        });
+        const bg = new THREE.Mesh(bgGeometry, bgMaterial);
+        bg.position.z = -0.05;
+        warningGroup.add(bg);
+        
+        warningGroup.position.set(0, 1.5, 0);
+        warningGroup.visible = false;
+        
+        return warningGroup;
+    }
+    
+    update(worldSpeed, playerPosition = null, camera = null) {
+        this.group.position.z -= worldSpeed;
+        this.z = this.group.position.z;
+        
+        if (this.group.position.z < -50) {
+            this.group.position.z += 350;
+            this.z = this.group.position.z;
+        }
+        
+        if (playerPosition && camera) {
+            const distanceToPlayer = this.group.position.z - playerPosition.z;
+            
+            if (distanceToPlayer > 0 && distanceToPlayer < this.warningDistance) {
+                this.warning.visible = true;
+                
+                const time = Date.now() * 0.005;
+                this.warning.position.y = 1.5 + Math.sin(time) * 0.3;
+                this.warning.rotation.z = Math.sin(time * 2) * 0.2;
+                this.warning.lookAt(camera.position);
+                
+                const urgency = 1 - (distanceToPlayer / this.warningDistance);
+                this.warning.children.forEach(child => {
+                    if (child.material.opacity !== undefined) {
+                        child.material.opacity = 0.6 + urgency * 0.4;
+                    }
+                });
+            } else {
+                this.warning.visible = false;
+            }
+        }
+    }
+    
+    get mesh() {
+        return this.group;
+    }
+}
+
+src/environment/structures/StreetLamp.js
+javascript
+
+import * as THREE from 'three';
+
+export class StreetLamp {
+    constructor(scene, x, z) {
+        this.scene = scene;
+        this.group = new THREE.Group();
+        this.initialZ = z;
+        
+        this.createLamp();
+        this.group.position.set(x, 0, z);
+        scene.add(this.group);
+    }
+    
+    createLamp() {
+        // Pole
+        const poleGeometry = new THREE.CylinderGeometry(0.15, 0.15, 5, 8);
+        const poleMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+        const pole = new THREE.Mesh(poleGeometry, poleMaterial);
+        pole.position.y = 2.5;
+        pole.castShadow = false;
+        this.group.add(pole);
+        
+        // Lamp head
+        const lampHeadGeometry = new THREE.BoxGeometry(0.4, 0.6, 0.4);
+        const lampHeadMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
+        const lampHead = new THREE.Mesh(lampHeadGeometry, lampHeadMaterial);
+        lampHead.position.y = 5.3;
+        lampHead.castShadow = false;
+        this.group.add(lampHead);
+        
+        // Light bulb
+        const bulbGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+        const bulbMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xffffbb,
+            emissive: 0xffffbb,
+            emissiveIntensity: 1.5
+        });
+        const bulb = new THREE.Mesh(bulbGeometry, bulbMaterial);
+        bulb.position.y = 5;
+        this.group.add(bulb);
+        
+        // Point light
+        const light = new THREE.PointLight(0xffffcc, 0.5, 20);
+        light.position.y = 5;
+        light.castShadow = false;
+        this.group.add(light);
+        
+        // Ground light pool
+        this.createLightPool();
+    }
+    
+    createLightPool() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 256;
+        const context = canvas.getContext('2d');
+        
+        const gradient = context.createRadialGradient(128, 128, 0, 128, 128, 128);
+        gradient.addColorStop(0, 'rgba(255, 255, 200, 0.8)');
+        gradient.addColorStop(0.3, 'rgba(255, 255, 180, 0.5)');
+        gradient.addColorStop(0.6, 'rgba(255, 255, 150, 0.2)');
+        gradient.addColorStop(1, 'rgba(255, 255, 100, 0)');
+        
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, 256, 256);
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        const lightPoolGeometry = new THREE.CircleGeometry(5, 32);
+        const lightPoolMaterial = new THREE.MeshBasicMaterial({ 
+            map: texture,
+            transparent: true,
+            opacity: 1,
+            side: THREE.DoubleSide,
+            blending: THREE.AdditiveBlending
+        });
+        const lightPool = new THREE.Mesh(lightPoolGeometry, lightPoolMaterial);
+        lightPool.rotation.x = -Math.PI / 2;
+        lightPool.position.y = 0.05;
+        this.group.add(lightPool);
+    }
+    
+    update(worldSpeed) {
+        this.group.position.z -= worldSpeed;
+        if (this.group.position.z < -50) {
+            this.group.position.z += 350;
+        }
+    }
+}
+
+src/environment/structures/Bridge.js
+javascript
+
+import * as THREE from 'three';
+
+export class Bridge {
+    constructor(scene, z) {
+        this.scene = scene;
+        this.group = new THREE.Group();
+        this.initialZ = z;
+        
+        this.createBridge();
+        this.group.position.set(0, 0, z);
+        scene.add(this.group);
+    }
+    
+    createBridge() {
+        // Bridge deck
+        const deckGeometry = new THREE.BoxGeometry(80, 0.5, 12);
+        const deckMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
+        const deck = new THREE.Mesh(deckGeometry, deckMaterial);
+        deck.position.y = 8;
+        deck.castShadow = false;
+        this.group.add(deck);
+        
+        // Railings
+        this.createRailings();
+        
+        // Support pillars
+        this.createPillars();
+        
+        // Street lamps on bridge
+        this.createBridgeLamps();
+        
+        // Location guide signs
+        this.createBridgeSigns();
+        
+        // Overhead signs
+        this.createOverheadSigns();
+        
+        // Bridge cars
+        this.createBridgeCars();
+        
+        // Shadow/underpass effect
+        this.createShadow();
+    }
+    
+    createRailings() {
+        const railingGeometry = new THREE.BoxGeometry(80, 1, 0.3);
+        const railingMaterial = new THREE.MeshLambertMaterial({ color: 0x666666 });
+        
+        const railingLeft = new THREE.Mesh(railingGeometry, railingMaterial);
+        railingLeft.position.set(0, 8.75, -6);
+        this.group.add(railingLeft);
+        
+        const railingRight = new THREE.Mesh(railingGeometry, railingMaterial);
+        railingRight.position.set(0, 8.75, 6);
+        this.group.add(railingRight);
+    }
+    
+    createPillars() {
+        const pillarGeometry = new THREE.BoxGeometry(2, 8, 2);
+        const pillarMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
+        const pillarPositions = [-30, -15, 15, 30];
+        
+        pillarPositions.forEach(x => {
+            const pillarL = new THREE.Mesh(pillarGeometry, pillarMaterial);
+            pillarL.position.set(x, 4, -8);
+            pillarL.castShadow = false;
+            this.group.add(pillarL);
+            
+            const pillarR = new THREE.Mesh(pillarGeometry, pillarMaterial);
+            pillarR.position.set(x, 4, 8);
+            pillarR.castShadow = false;
+            this.group.add(pillarR);
+        });
+    }
+    
+    createBridgeLamps() {
+        const lampPositions = [-35, -20, -5, 10, 25];
+        lampPositions.forEach(x => {
+            this.createSingleBridgeLamp(x, 8, -5.5);
+            this.createSingleBridgeLamp(x, 8, 5.5);
+        });
+    }
+    
+    createSingleBridgeLamp(x, y, z) {
+        const lampGroup = new THREE.Group();
+        
+        const postGeometry = new THREE.CylinderGeometry(0.1, 0.1, 2, 8);
+        const postMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+        const post = new THREE.Mesh(postGeometry, postMaterial);
+        post.position.y = 1;
+        lampGroup.add(post);
+        
+        const headGeometry = new THREE.BoxGeometry(0.3, 0.4, 0.3);
+        const headMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
+        const head = new THREE.Mesh(headGeometry, headMaterial);
+        head.position.y = 2.2;
+        lampGroup.add(head);
+        
+        const bulbGeometry = new THREE.SphereGeometry(0.15, 8, 8);
+        const bulbMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xffffbb,
+            emissive: 0xffffbb,
+            emissiveIntensity: 1
+        });
+        const bulb = new THREE.Mesh(bulbGeometry, bulbMaterial);
+        bulb.position.y = 2;
+        lampGroup.add(bulb);
+        
+        const light = new THREE.PointLight(0xffffcc, 0.8, 15);
+        light.position.y = 2;
+        lampGroup.add(light);
+        
+        lampGroup.position.set(x, y, z);
+        this.group.add(lampGroup);
+    }
+    
+    createBridgeSigns() {
+        this.createSingleBridgeSign(-25, 'CITY CENTER', '5 KM');
+    }
+    
+    createSingleBridgeSign(x, topText, bottomText) {
+        const signGroup = new THREE.Group();
+        
+        const postGeometry = new THREE.CylinderGeometry(0.08, 0.08, 3, 8);
+        const postMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
+        const post = new THREE.Mesh(postGeometry, postMaterial);
+        post.position.y = 1.5;
+        post.position.z = -7;
+        signGroup.add(post);
+        
+        const boardGeometry = new THREE.BoxGeometry(3, 1.5, 0.1);
+        const boardMaterial = new THREE.MeshLambertMaterial({ color: 0x2a5f2a });
+        const board = new THREE.Mesh(boardGeometry, boardMaterial);
+        board.position.y = 3.5;
+        board.position.z = -7;
+        signGroup.add(board);
+        
+        const borderGeometry = new THREE.BoxGeometry(3.1, 1.6, 0.08);
+        const borderMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
+        const border = new THREE.Mesh(borderGeometry, borderMaterial);
+        border.position.y = 3.5;
+        border.position.z = -7.05;
+        signGroup.add(border);
+        
+        const texture = this.createSignTexture(topText, bottomText);
+        const textMaterial = new THREE.MeshBasicMaterial({ 
+            map: texture,
+            transparent: true
+        });
+        const textPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(2.8, 1.4),
+            textMaterial
+        );
+        textPlane.position.y = 3.5;
+        textPlane.position.z = -6.95;
+        signGroup.add(textPlane);
+        
+        signGroup.position.set(x, 8, 0);
+        this.group.add(signGroup);
+    }
+    
+    createSignTexture(topText, bottomText) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 256;
+        const ctx = canvas.getContext('2d');
+        
+        ctx.fillStyle = '#2a5f2a';
+        ctx.fillRect(0, 0, 512, 256);
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 48px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(topText, 256, 80);
+        
+        ctx.font = '36px Arial';
+        ctx.fillText(bottomText, 256, 180);
+        
+        return new THREE.CanvasTexture(canvas);
+    }
+    
+    createOverheadSigns() {
+        this.createSingleOverheadSign(0, 'DOWNTOWN ↑', 'AIRPORT →');
+        this.createSingleOverheadSign(5, 'HIGHWAY 101', 'NORTH');
+        this.createSingleOverheadSign(10, 'EXIT 42', 'NEXT 2 KM');
+    }
+    
+    createSingleOverheadSign(x, topText, bottomText) {
+        const signGroup = new THREE.Group();
+        
+        const boardGeometry = new THREE.BoxGeometry(5, 2, 0.15);
+        const boardMaterial = new THREE.MeshLambertMaterial({ color: 0x2a5f2a });
+        const board = new THREE.Mesh(boardGeometry, boardMaterial);
+        board.position.y = 5.5;
+        signGroup.add(board);
+        
+        const borderGeometry = new THREE.BoxGeometry(5.1, 2.1, 0.12);
+        const borderMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
+        const border = new THREE.Mesh(borderGeometry, borderMaterial);
+        border.position.set(0, 5.5, 0.08);
+        signGroup.add(border);
+        
+        // Glowing lamps
+        const lampPositions = [-2, -0.7, 0.7, 2];
+        lampPositions.forEach(lampX => {
+            const lampHousing = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.15, 0.15, 0.3, 8),
+                new THREE.MeshLambertMaterial({ color: 0x222222 })
+            );
+            lampHousing.rotation.z = Math.PI / 2;
+            lampHousing.rotation.x = Math.PI / 4;
+            lampHousing.position.set(lampX, 6.7, 0.2);
+            signGroup.add(lampHousing);
+            
+            const bulb = new THREE.Mesh(
+                new THREE.SphereGeometry(0.1, 8, 8),
+                new THREE.MeshBasicMaterial({ 
+                    color: 0xffffaa,
+                    emissive: 0xffffaa,
+                    emiss
+
+Continue
+javascript
+
+                    emissiveIntensity: 1.2
+                })
+            );
+            bulb.position.set(lampX, 6.6, 0.3);
+            signGroup.add(bulb);
+            
+            const spotLight = new THREE.SpotLight(0xffffcc, 0.6, 5, Math.PI / 6, 0.5);
+            spotLight.position.set(lampX, 6.7, 0.3);
+            spotLight.target.position.set(lampX, 5.5, 0.1);
+            signGroup.add(spotLight);
+            signGroup.add(spotLight.target);
+        });
+        
+        const texture = this.createOverheadSignTexture(topText, bottomText);
+        const frontMaterial = new THREE.MeshBasicMaterial({ map: texture });
+        
+        const frontPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(4.8, 1.8),
+            frontMaterial
+        );
+        frontPlane.position.set(0, 5.5, 0.08);
+        signGroup.add(frontPlane);
+        
+        const backPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(4.8, 1.8),
+            frontMaterial
+        );
+        backPlane.position.set(0, 5.5, -0.08);
+        backPlane.rotation.y = Math.PI;
+        signGroup.add(backPlane);
+        
+        signGroup.position.set(x, 2, -10);
+        this.group.add(signGroup);
+    }
+    
+    createOverheadSignTexture(topText, bottomText) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 256;
+        const ctx = canvas.getContext('2d');
+        
+        ctx.fillStyle = '#2a5f2a';
+        ctx.fillRect(0, 0, 512, 256);
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 62px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(topText, 256, 90);
+        
+        ctx.font = '58px Arial';
+        ctx.fillText(bottomText, 256, 170);
+        
+        return new THREE.CanvasTexture(canvas);
+    }
+    
+    createBridgeCars() {
+        const bridgeCarColors = [0xff0000, 0x0000ff, 0xffff00, 0x00ff00];
+        for (let i = 0; i < 4; i++) {
+            const carBody = new THREE.Mesh(
+                new THREE.BoxGeometry(2, 1, 4),
+                new THREE.MeshLambertMaterial({ color: bridgeCarColors[i] })
+            );
+            carBody.position.set(-35 + i * 20, 9, Math.random() * 8 - 4);
+            carBody.castShadow = false;
+            this.group.add(carBody);
+        }
+    }
+    
+    createShadow() {
+        const shadowGeometry = new THREE.PlaneGeometry(80, 12);
+        const shadowMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x000000,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide
+        });
+        const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
+        shadow.rotation.x = -Math.PI / 2;
+        shadow.position.y = 0.15;
+        this.group.add(shadow);
+    }
+    
+    update(worldSpeed) {
+        this.group.position.z -= worldSpeed;
+        if (this.group.position.z < -50) {
+            this.group.position.z += 350;
+        }
+    }
+}
+
+src/environment/structures/Intersection.js
+javascript
+
+import * as THREE from 'three';
+
+export class Intersection {
+    constructor(scene, z) {
+        this.scene = scene;
+        this.group = new THREE.Group();
+        this.initialZ = z;
+        
+        this.createIntersection();
+        this.group.position.set(0, 0, z);
+        scene.add(this.group);
+    }
+    
+    createIntersection() {
+        // Intersection road surface
+        const crossRoadGeometry = new THREE.PlaneGeometry(100, 24);
+        const crossRoadMaterial = new THREE.MeshLambertMaterial({ color: 0x3a3a3a });
+        const crossRoad = new THREE.Mesh(crossRoadGeometry, crossRoadMaterial);
+        crossRoad.rotation.x = -Math.PI / 2;
+        crossRoad.position.y = 0.02;
+        this.group.add(crossRoad);
+        
+        // Crosswalk lines
+        this.createCrosswalk();
+        
+        // Traffic lights
+        this.createTrafficLights();
+        
+        // Road signs
+        this.createRoadSigns();
+    }
+    
+    createCrosswalk() {
+        const crosswalkMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
+        for (let i = 0; i < 6; i++) {
+            const line = new THREE.Mesh(
+                new THREE.PlaneGeometry(1.8, 24),
+                crosswalkMaterial
+            );
+            line.rotation.x = -Math.PI / 2;
+            line.position.set(-8 + i * 3.2, 0.03, 0);
+            this.group.add(line);
+        }
+    }
+    
+    createTrafficLights() {
+        this.createSingleTrafficLight(-10, -14, 'red');
+        this.createSingleTrafficLight(-10, 14, 'red');
+        this.createSingleTrafficLight(10, -14, 'green');
+        this.createSingleTrafficLight(10, 14, 'green');
+    }
+    
+    createSingleTrafficLight(x, z, activeColor) {
+        const poleGeometry = new THREE.CylinderGeometry(0.1, 0.1, 3.5, 8);
+        const poleMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+        const pole = new THREE.Mesh(poleGeometry, poleMaterial);
+        pole.position.set(x, 1.75, z);
+        this.group.add(pole);
+        
+        const lightBoxGeometry = new THREE.BoxGeometry(0.35, 1, 0.35);
+        const lightBoxMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
+        const lightBox = new THREE.Mesh(lightBoxGeometry, lightBoxMaterial);
+        lightBox.position.set(x, 4, z);
+        this.group.add(lightBox);
+        
+        // Red light
+        const redLight = new THREE.Mesh(
+            new THREE.SphereGeometry(0.13, 8, 8),
+            new THREE.MeshBasicMaterial({ 
+                color: activeColor === 'red' ? 0xff0000 : 0x330000,
+                emissive: activeColor === 'red' ? 0xff0000 : 0x000000,
+                emissiveIntensity: activeColor === 'red' ? 0.8 : 0
+            })
+        );
+        redLight.position.set(x, 4.35, z);
+        this.group.add(redLight);
+        
+        // Yellow light
+        const yellowLight = new THREE.Mesh(
+            new THREE.SphereGeometry(0.13, 8, 8),
+            new THREE.MeshBasicMaterial({ color: 0x333300 })
+        );
+        yellowLight.position.set(x, 4, z);
+        this.group.add(yellowLight);
+        
+        // Green light
+        const greenLight = new THREE.Mesh(
+            new THREE.SphereGeometry(0.13, 8, 8),
+            new THREE.MeshBasicMaterial({ 
+                color: activeColor === 'green' ? 0x00ff00 : 0x003300,
+                emissive: activeColor === 'green' ? 0x00ff00 : 0x000000,
+                emissiveIntensity: activeColor === 'green' ? 0.8 : 0
+            })
+        );
+        greenLight.position.set(x, 3.65, z);
+        this.group.add(greenLight);
+        
+        // Point light for active signal
+        if (activeColor === 'red' || activeColor === 'green') {
+            const signalLight = new THREE.PointLight(
+                activeColor === 'red' ? 0xff0000 : 0x00ff00,
+                0.5,
+                10
+            );
+            signalLight.position.set(x, activeColor === 'red' ? 4.35 : 3.65, z);
+            this.group.add(signalLight);
+        }
+    }
+    
+    createRoadSigns() {
+        this.createSingleSign(-12, -16, 'YIELD');
+        this.createSingleSign(12, 16, 'STOP');
+    }
+    
+    createSingleSign(x, z, text) {
+        const signGroup = new THREE.Group();
+        
+        const postGeometry = new THREE.CylinderGeometry(0.08, 0.08, 2.5, 8);
+        const postMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
+        const post = new THREE.Mesh(postGeometry, postMaterial);
+        post.position.y = 1.25;
+        signGroup.add(post);
+        
+        let boardGeometry, boardColor;
+        
+        if (text === 'STOP') {
+            boardGeometry = new THREE.CylinderGeometry(0.8, 0.8, 0.1, 8);
+            boardColor = 0xff0000;
+        } else {
+            boardGeometry = new THREE.ConeGeometry(0.8, 1.4, 3);
+            boardColor = 0xffff00;
+        }
+        
+        const boardMaterial = new THREE.MeshLambertMaterial({ color: boardColor });
+        const board = new THREE.Mesh(boardGeometry, boardMaterial);
+        board.position.y = 2.8;
+        board.position.z = -0.1;
+        board.rotation.y = Math.PI / 2;
+        board.rotation.x = Math.PI / 2;
+        if (text === 'YIELD') board.rotation.z = Math.PI;
+        signGroup.add(board);
+        
+        const borderMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
+        let border;
+        if (text === 'STOP') {
+            border = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.85, 0.85, 0.08, 8),
+                borderMaterial
+            );
+        } else {
+            border = new THREE.Mesh(
+                new THREE.ConeGeometry(0.85, 1.5, 3),
+                borderMaterial
+            );
+            border.rotation.z = Math.PI;
+        }
+        border.position.y = 2.8;
+        border.position.z = -0.1;
+        border.rotation.y = Math.PI / 2;
+        border.rotation.x = Math.PI / 2;
+        signGroup.add(border);
+        
+        signGroup.position.set(x, 0, z);
+        this.group.add(signGroup);
+    }
+    
+    update(worldSpeed) {
+        this.group.position.z -= worldSpeed;
+        if (this.group.position.z < -50) {
+            this.group.position.z += 350;
+        }
+    }
+}
+
+src/entities/CrossingTraffic.js
+javascript
+
+import * as THREE from 'three';
+
+export class CrossingTraffic {
+    constructor(scene, x, intersectionZ) {
+        this.scene = scene;
+        this.group = new THREE.Group();
+        this.speed = 0.4 + Math.random() * 0.3;
+        this.intersectionZ = intersectionZ;
+        
+        this.createCar();
+        this.group.position.set(x, 0, intersectionZ + (Math.random() - 0.5) * 10);
+        this.group.rotation.y = Math.PI / 2;
+        scene.add(this.group);
+    }
+    
+    createCar() {
+        const colors = [0xff00ff, 0x00ffff, 0xffa500, 0xff1493, 0x00ff7f];
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        
+        const bodyGeometry = new THREE.BoxGeometry(2, 1, 4);
+        const bodyMaterial = new THREE.MeshLambertMaterial({ color });
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.position.y = 0.5;
+        body.castShadow = false;
+        this.group.add(body);
+        
+        const roof = new THREE.Mesh(
+            new THREE.BoxGeometry(1.6, 0.8, 2),
+            bodyMaterial
+        );
+        roof.position.y = 1.4;
+        roof.position.z = -0.3;
+        this.group.add(roof);
+    }
+    
+    update(worldSpeed) {
+        this.group.position.x += this.speed;
+        this.group.position.z -= worldSpeed;
+        
+        if (this.group.position.x > 50) {
+            this.group.position.x = -40;
+        }
+        
+        if (this.group.position.z < -50) {
+            this.group.position.z += 350;
+        }
+    }
+}
+
+src/entities/PoliceCar.js
+javascript
+
+import * as THREE from 'three';
+
+export class PoliceCar {
+    constructor(scene, x, z) {
+        this.scene = scene;
+        this.group = new THREE.Group();
+        this.initialZ = z;
+        
+        this.createCar();
+        this.group.position.set(x, 0, z);
+        scene.add(this.group);
+    }
+    
+    createCar() {
+        // Police car body
+        const bodyGeometry = new THREE.BoxGeometry(2, 1, 4);
+        const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0x000000 });
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.position.y = 0.5;
+        body.castShadow = true;
+        this.group.add(body);
+        
+        // White stripe
+        const stripeGeometry = new THREE.BoxGeometry(2.1, 0.5, 1.5);
+        const stripeMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
+        const stripe = new THREE.Mesh(stripeGeometry, stripeMaterial);
+        stripe.position.y = 0.5;
+        this.group.add(stripe);
+        
+        // Red/Blue lights
+        const lightGeometry = new THREE.BoxGeometry(0.3, 0.2, 0.3);
+        const redLight = new THREE.Mesh(
+            lightGeometry, 
+            new THREE.MeshLambertMaterial({ color: 0xff0000 })
+        );
+        redLight.position.set(-0.5, 1.2, 1.5);
+        this.group.add(redLight);
+        
+        const blueLight = new THREE.Mesh(
+            lightGeometry, 
+            new THREE.MeshLambertMaterial({ color: 0x0000ff })
+        );
+        blueLight.position.set(0.5, 1.2, 1.5);
+        this.group.add(blueLight);
+    }
+    
+    update(worldSpeed) {
+        this.group.position.z -= worldSpeed;
+        if (this.group.position.z < -50) {
+            this.group.position.z += 350;
+        }
+    }
+}
+
+src/environment/Weather.js
+javascript
+
+import * as THREE from 'three';
+
+export class Weather {
+    constructor(scene) {
+        this.scene = scene;
+        this.stars = null;
+        this.moon = null;
+        
+        this.createNightSky();
+        this.createMoon();
+    }
+    
+    createNightSky() {
+        this.scene.background = new THREE.Color(0x000011);
+        this.scene.fog = new THREE.Fog(0x000011, 1, 2);
+        
+        // Starfield
+        const starGeometry = new THREE.BufferGeometry();
+        const starCount = 300;
+        const positions = new Float32Array(starCount * 3);
+        
+        for (let i = 0; i < starCount * 3; i += 3) {
+            positions[i] = (Math.random() - 0.5) * 200;
+            positions[i + 1] = 30 + Math.random() * 70;
+            positions[i + 2] = (Math.random() - 0.5) * 200;
+        }
+        
+        starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        
+        const starMaterial = new THREE.PointsMaterial({
+            color: 0xffffff,
+            size: 0.3,
+            transparent: true,
+            opacity: 0.8
+        });
+        
+        this.stars = new THREE.Points(starGeometry, starMaterial);
+        this.scene.add(this.stars);
+    }
+    
+    createMoon() {
+        const moonGeometry = new THREE.SphereGeometry(3, 16, 16);
+        const moonMaterial = new THREE.MeshLambertMaterial({ 
+            color: 0xffffcc,
+            emissive: 0xffffaa,
+            emissiveIntensity: 0.3
+        });
+        this.moon = new THREE.Mesh(moonGeometry, moonMaterial);
+        this.moon.position.set(40, 50, 100);
+        this.scene.add(this.moon);
+    }
+    
+    update() {
+        if (this.stars) {
+            this.stars.material.opacity = 0.6 + Math.sin(Date.now() * 0.001) * 0.2;
+        }
+    }
+    
+    transitionToFarmland(progress) {
+        const cityColor = new THREE.Color(0x0a0a1a);
+        const farmColor = new THREE.Color(0x87a96b);
+        const currentColor = cityColor.clone().lerp(farmColor, progress);
+        
+        this.scene.background = currentColor;
+        if (this.scene.fog) {
+            this.scene.fog.color = currentColor;
+        }
+    }
+    
+    transitionToCity(progress) {
+        const farmColor = new THREE.Color(0x87a96b);
+        const cityColor = new THREE.Color(0x0a0a1a);
+        const currentColor = farmColor.clone().lerp(cityColor, progress);
+        
+        this.scene.background = currentColor;
+        if (this.scene.fog) {
+            this.scene.fog.color = currentColor;
+        }
+    }
+}
+
+src/environment/Scenery.js
+javascript
+
+import { Tree } from './objects/Tree.js';
+import { Bush } from './objects/Bush.js';
+import { House } from './objects/House.js';
+import { Cloud } from './objects/Cloud.js';
+import { StreetLamp } from './structures/StreetLamp.js';
+import { Bridge } from './structures/Bridge.js';
+import { Intersection } from './structures/Intersection.js';
+import { PoliceCar } from '../entities/PoliceCar.js';
+import { RestrictedZones } from '../utils/Constants.js';
+import { Helpers } from '../utils/Helpers.js';
+
+export class Scenery {
+    constructor(scene) {
+        this.scene = scene;
+        this.objects = [];
+        
+        this.spawnAll();
+    }
+    
+    spawnAll() {
+        this.spawnTrees();
+        this.spawnBushes();
+        this.spawnHouses();
+        this.spawnClouds();
+        this.spawnStreetLamps();
+        this.spawnBridges();
+        this.spawnIntersections();
+        this.spawnPoliceCars();
+    }
+    
+    spawnTrees() {
+        for (let z = -50; z < 350; z += 12) {
+            if (!Helpers.isInRestrictedZone(0, z, RestrictedZones.intersections)) {
+                if (Math.random() > 0.4) {
+                    const tree = new Tree(this.scene, -10 - Math.random() * 5, z);
+                    this.objects.push(tree);
+                }
+                if (Math.random() > 0.4) {
+                    const tree = new Tree(this.scene, 10 + Math.random() * 5, z);
+                    this.objects.push(tree);
+                }
+            }
+        }
+        
+        // Background trees
+        for (let z = -50; z < 300; z += 25) {
+            if (!Helpers.isInRestrictedZone(0, z, RestrictedZones.intersections)) {
+                if (Math.random() > 0.6) {
+                    const tree = new Tree(this.scene, -20 - Math.random() * 10, z);
+                    this.objects.push(tree);
+                }
+                if (Math.random() > 0.6) {
+                    const tree = new Tree(this.scene, 20 + Math.random() * 10, z);
+                    this.objects.push(tree);
+                }
+            }
+        }
+    }
+    
+    spawnBushes() {
+        for (let z = -50; z < 350; z += 12) {
+            if (!Helpers.isInRestrictedZone(0, z, RestrictedZones.intersections)) {
+                if (Math.random() > 0.6) {
+                    const bush = new Bush(this.scene, -10 - Math.random() * 3, z);
+                    this.objects.push(bush);
+                }
+                if (Math.random() > 0.6) {
+                    const bush = new Bush(this.scene, 10 + Math.random() * 3, z);
+                    this.objects.push(bush);
+                }
+            }
+        }
+        
+        // Near road edge
+        for (let z = -50; z < 300; z += 15) {
+            if (!Helpers.isInRestrictedZone(0, z, RestrictedZones.intersections)) {
+                if (Math.random() > 0.5) {
+                    const bush = new Bush(this.scene, -11 - Math.random() * 2, z);
+                    this.objects.push(bush);
+                }
+                if (Math.random() > 0.5) {
+                    const bush = new Bush(this.scene, 11 + Math.random() * 2, z);
+                    this.objects.push(bush);
+                }
+            }
+        }
+        
+        // Background bushes
+        for (let z = -50; z < 300; z += 20) {
+            if (!Helpers.isInRestrictedZone(0, z, RestrictedZones.intersections)) {
+                if (Math.random() > 0.5) {
+                    const bush = new Bush(this.scene, -18 - Math.random() * 8, z);
+                    this.objects.push(bush);
+                }
+                if (Math.random() > 0.5) {
+                    const bush = new Bush(this.scene, 18 + Math.random() * 8, z);
+                    this.objects.push(bush);
+                }
+            }
+        }
+    }
+    
+    spawnHouses() {
+        const housePositions = [
+            { x: -15, z: 30, color: 0xd2b48c },
+            { x: 15, z: 60, color: 0xd2b48c },
+            { x: -18, z: 220, color: 0xd2b48c },
+            { x: 20, z: 250, color: 0xd2b48c },
+            { x: -22, z: 280, color: 0xd2b48c },
+            { x: -20, z: 150, color: 0xc9a86a },
+            { x: 17, z: 200, color: 0xe8d4b0 },
+            { x: -19, z: 270, color: 0xb89968 }
+        ];
+        
+        housePositions.forEach(pos => {
+            if (!Helpers.isInRestrictedZone(pos.x, pos.z, RestrictedZones.intersections)) {
+                const house = new House(this.scene, pos.x, pos.z, pos.color);
+                this.objects.push(house);
+            }
+        });
+    }
+    
+    spawnClouds() {
+        for (let i = 0; i < 20; i++) {
+            const cloud = new Cloud(
+                this.scene,
+                -50 + Math.random() * 100,
+                20 + Math.random() * 30,
+                -100 + Math.random() * 400
+            );
+            this.objects.push(cloud);
+        }
+    }
+    
+    spawnStreetLamps() {
+        for (let z = -50; z < 350; z += 40) {
+            if (!Helpers.isInRestrictedZone(0, z, RestrictedZones.intersections)) {
+                const lamp1 = new StreetLamp(this.scene, -9.5, z);
+                const lamp2 = new StreetLamp(this.scene, 9.5, z);
+                this.objects.push(lamp1, lamp2);
+            }
+        }
+    }
+    
+    spawnBridges() {
+        const bridge1 = new Bridge(this.scene, 180);
+        const bridge2 = new Bridge(this.scene, 450);
+        this.objects.push(bridge1, bridge2);
+    }
+    
+    spawnIntersections() {
+        const intersection1 = new Intersection(this.scene, 120);
+        const intersection2 = new Intersection(this.scene, 300);
+        this.objects.push(intersection1, intersection2);
+    }
+    
+    spawnPoliceCars() {
+        const policePositions = [
+            { x: -12, z: 80 },
+            { x: 12, z: 240 }
+        ];
+        
+        policePositions.forEach(pos => {
+            if (!Helpers.isInRestrictedZone(pos.x, pos.z, RestrictedZones.intersections)) {
+                const police = new PoliceCar(this.scene, pos.x, pos.z);
+                this.objects.push(police);
+            }
+        });
+    }
+    
+    update(worldSpeed) {
+        this.objects.forEach(obj => {
+            if (obj.update) {
+                obj.update(worldSpeed);
+            }
+        });
+    }
+    
+    fadeOut(progress) {
+        this.objects.forEach(obj => {
+            if (obj.group && (obj instanceof Tree || obj instanceof Bush || obj instanceof House)) {
+                obj.group.traverse(child => {
+                    if (child.material) {
+                        child.material.opacity = 1 - progress;
+                        child.material.transparent = true;
+                    }
+                });
+                
+                if (progress > 0.8) {
+                    obj.group.visible = false;
+                }
+            }
+        });
+    }
+    
+    fadeIn(progress) {
+        this.objects.forEach(obj => {
+            if (obj.group && (obj instanceof Tree || obj instanceof Bush || obj instanceof House)) {
+                obj.group.visible = true;
+                obj.group.traverse(child => {
+                    if (child.material) {
+                        child.material.opacity = progress;
+                        child.material.transparent = true;
+                    }
+                });
+            }
+        });
+    }
+}
+
+src/environment/BiomeManager.js
+javascript
+
+import { BiomeTypes } from '../utils/Constants.js';
+import { CityBiome } from './biomes/CityBiome.js';
+import { FarmlandBiome } from './biomes/FarmlandBiome.js';
+import { GameConfig } from '../config/GameConfig.js';
+
+export class BiomeManager {
+    constructor(scene) {
+        this.scene = scene;
+        this.currentBiome = BiomeTypes.CITY;
+        this.targetBiome = BiomeTypes.CITY;
+        this.nextBiomeSwitch = GameConfig.biome.transitionDistance;
+        this.isTransitioning = false;
+        this.transitionProgress = 0;
+        this.transitionStartDistance = 0;
+        
+        this.cityBiome = new CityBiome(scene);
+        this.farmlandBiome = new FarmlandBiome(scene);
+        
+        // Start with city biome visible
+        this.farmlandBiome.hide();
+    }
+    
+    update(distance, worldSpeed) {
+        // Check if we should start a transition
+        if (!this.isTransitioning && 
+            distance >= this.nextBiomeSwitch - GameConfig.biome.transitionZoneLength) {
+            this.isTransitioning = true;
+            this.transitionStartDistance = distance;
+            this.transitionProgress = 0;
+            this.targetBiome = this.currentBiome === BiomeTypes.CITY 
+                ? BiomeTypes.FARMLAND 
+                : BiomeTypes.CITY;
+            
+            this.showNotification(`APPROACHING ${this.targetBiome.toUpperCase()}`);
+        }
+        
+        // Update transition progress
+        if (this.isTransitioning) {
+            const distanceInTransition = distance - this.transitionStartDistance;
+            this.transitionProgress = Math.min(
+                distanceInTransition / GameConfig.biome.transitionZoneLength,
+                1
+            );
+            
+            this.applyTransition(this.transitionProgress);
+            
+            if (this.transitionProgress >= 1) {
+                this.isTransitioning = false;
+                this.currentBiome = this.targetBiome;
+                this.nextBiomeSwitch += GameConfig.biome.transitionDistance;
+            }
+        }
+        
+        // Update active biome
+        if (this.currentBiome === BiomeTypes.FARMLAND) {
+            this.farmlandBiome.update(worldSpeed);
+        }
+    }
+    
+    applyTransition(progress) {
+        const eased = progress < 0.5 
+            ? 2 * progress * progress 
+            : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+        
+        if (this.targetBiome === BiomeTypes.FARMLAND) {
+            this.cityBiome.fadeOut(eased);
+            this.farmlandBiome.fadeIn(eased);
+        } else {
+            this.farmlandBiome.fadeOut(eased);
+            this.cityBiome.fadeIn(eased);
+        }
+    }
+    
+    showNotification(text) {
+        const notification = document.createElement('div');
+        notification.textContent = text;
+        Object.assign(notification.style, {
+            position: 'fixed',
+
+Continue
+javascript
+
+            top: '20%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            fontSize: '32px',
+            fontWeight: 'bold',
+            color: '#ffffff',
+            textShadow: '0 0 20px rgba(0,0,0,0.8)',
+            zIndex: '100',
+            pointerEvents: 'none',
+            background: 'rgba(0,0,0,0.5)',
+            padding: '15px 30px',
+            borderRadius: '10px'
+        });
+        
+        document.body.appendChild(notification);
+        setTimeout(() => notification.remove(), 4000);
+    }
+}
+
+src/environment/biomes/CityBiome.js
+javascript
+
+export class CityBiome {
+    constructor(scene) {
+        this.scene = scene;
+        this.objects = [];
+    }
+    
+    fadeOut(progress) {
+        // City objects fade out handled by Scenery manager
+    }
+    
+    fadeIn(progress) {
+        // City objects fade in handled by Scenery manager
+    }
+}
+
+src/environment/biomes/FarmlandBiome.js
+javascript
+
+import * as THREE from 'three';
+import { Helpers } from '../../utils/Helpers.js';
+import { RestrictedZones } from '../../utils/Constants.js';
+
+export class FarmlandBiome {
+    constructor(scene) {
+        this.scene = scene;
+        this.objects = [];
+        
+        this.spawnFarmland();
+    }
+    
+    spawnFarmland() {
+        // Farms
+        this.createFarm(-20, 50);
+        this.createFarm(22, 140);
+        
+        // Silos
+        this.createSilo(-25, 80);
+        this.createSilo(18, 200);
+        
+        // Windmills
+        this.createWindmill(-28, 160);
+        this.createWindmill(25, 240);
+        
+        // Crop fields
+        for (let z = 40; z < 280; z += 40) {
+            if (!Helpers.isInRestrictedZone(-15, z, RestrictedZones.intersections)) {
+                this.createCropField(-15, z);
+            }
+            if (!Helpers.isInRestrictedZone(15, z, RestrictedZones.intersections)) {
+                this.createCropField(15, z);
+            }
+        }
+        
+        // Wooden fences
+        for (let z = 35; z < 280; z += 15) {
+            if (!Helpers.isInRestrictedZone(-11, z, RestrictedZones.intersections)) {
+                this.createFencePost(-11, z);
+            }
+            if (!Helpers.isInRestrictedZone(11, z, RestrictedZones.intersections)) {
+                this.createFencePost(11, z);
+            }
+        }
+        
+        // Hay bales
+        const hayPositions = [
+            { x: -12, z: 70 }, { x: -14, z: 110 },
+            { x: 13, z: 90 }, { x: 15, z: 150 },
+            { x: -13, z: 180 }, { x: 12, z: 220 }
+        ];
+        
+        hayPositions.forEach(pos => {
+            if (!Helpers.isInRestrictedZone(pos.x, pos.z, RestrictedZones.intersections)) {
+                this.createHayBale(pos.x, pos.z);
+            }
+        });
+    }
+    
+    createFarm(x, z) {
+        const farmGroup = new THREE.Group();
+        
+        // Barn body
+        const barnBody = new THREE.Mesh(
+            new THREE.BoxGeometry(6, 4, 5),
+            new THREE.MeshLambertMaterial({ color: 0x8b0000 })
+        );
+        barnBody.position.y = 2;
+        barnBody.castShadow = false;
+        farmGroup.add(barnBody);
+        
+        // Barn roof
+        const roofShape = new THREE.Shape();
+        roofShape.moveTo(-3, 0);
+        roofShape.lineTo(0, 2);
+        roofShape.lineTo(3, 0);
+        roofShape.lineTo(-3, 0);
+        
+        const roofGeometry = new THREE.ExtrudeGeometry(roofShape, {
+            steps: 1,
+            depth: 5,
+            bevelEnabled: false
+        });
+        const roof = new THREE.Mesh(
+            roofGeometry,
+            new THREE.MeshLambertMaterial({ color: 0x4a4a4a })
+        );
+        roof.rotation.x = Math.PI / 2;
+        roof.position.set(0, 4, -2.5);
+        farmGroup.add(roof);
+        
+        // Door
+        const door = new THREE.Mesh(
+            new THREE.BoxGeometry(1.5, 2.5, 0.1),
+            new THREE.MeshLambertMaterial({ color: 0x3d2817 })
+        );
+        door.position.set(0, 1.25, 2.55);
+        farmGroup.add(door);
+        
+        // White cross on barn
+        const crossH = new THREE.Mesh(
+            new THREE.BoxGeometry(1, 0.2, 0.1),
+            new THREE.MeshLambertMaterial({ color: 0xffffff })
+        );
+        crossH.position.set(0, 3, 2.6);
+        farmGroup.add(crossH);
+        
+        const crossV = new THREE.Mesh(
+            new THREE.BoxGeometry(0.2, 1, 0.1),
+            new THREE.MeshLambertMaterial({ color: 0xffffff })
+        );
+        crossV.position.set(0, 3, 2.6);
+        farmGroup.add(crossV);
+        
+        farmGroup.position.set(x, 0, z);
+        this.scene.add(farmGroup);
+        this.objects.push({ mesh: farmGroup, type: 'barn', initialZ: z });
+    }
+    
+    createSilo(x, z) {
+        const siloGroup = new THREE.Group();
+        
+        // Main cylinder
+        const silo = new THREE.Mesh(
+            new THREE.CylinderGeometry(1, 1, 5, 16),
+            new THREE.MeshLambertMaterial({ color: 0xc0c0c0 })
+        );
+        silo.position.y = 2.5;
+        siloGroup.add(silo);
+        
+        // Dome top
+        const dome = new THREE.Mesh(
+            new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+            new THREE.MeshLambertMaterial({ color: 0xa0a0a0 })
+        );
+        dome.position.y = 5;
+        siloGroup.add(dome);
+        
+        // Horizontal bands
+        for (let i = 0; i < 4; i++) {
+            const band = new THREE.Mesh(
+                new THREE.CylinderGeometry(1.05, 1.05, 0.15, 16),
+                new THREE.MeshLambertMaterial({ color: 0x808080 })
+            );
+            band.position.y = 1 + i * 1.2;
+            siloGroup.add(band);
+        }
+        
+        siloGroup.position.set(x, 0, z);
+        this.scene.add(siloGroup);
+        this.objects.push({ mesh: siloGroup, type: 'silo', initialZ: z });
+    }
+    
+    createWindmill(x, z) {
+        const windmillGroup = new THREE.Group();
+        
+        // Tower
+        const tower = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.5, 1, 4, 8),
+            new THREE.MeshLambertMaterial({ color: 0xffffff })
+        );
+        tower.position.y = 2;
+        windmillGroup.add(tower);
+        
+        // Nacelle
+        const nacelle = new THREE.Mesh(
+            new THREE.BoxGeometry(0.8, 0.6, 1.2),
+            new THREE.MeshLambertMaterial({ color: 0xe0e0e0 })
+        );
+        nacelle.position.y = 4.3;
+        windmillGroup.add(nacelle);
+        
+        // Hub
+        const hub = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.3, 0.3, 0.3, 16),
+            new THREE.MeshLambertMaterial({ color: 0x404040 })
+        );
+        hub.rotation.z = Math.PI / 2;
+        hub.position.set(0, 4.3, 0.8);
+        windmillGroup.add(hub);
+        
+        // Blades
+        windmillGroup.userData.blades = [];
+        const bladeMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
+        
+        for (let i = 0; i < 3; i++) {
+            const blade = new THREE.Mesh(
+                new THREE.BoxGeometry(0.1, 2, 0.4),
+                bladeMaterial
+            );
+            blade.position.y = 1;
+            
+            const bladeArm = new THREE.Group();
+            bladeArm.add(blade);
+            bladeArm.rotation.z = (i * Math.PI * 2) / 3;
+            bladeArm.position.set(0, 4.3, 0.8);
+            windmillGroup.add(bladeArm);
+            windmillGroup.userData.blades.push(bladeArm);
+        }
+        
+        windmillGroup.position.set(x, 0, z);
+        this.scene.add(windmillGroup);
+        this.objects.push({ mesh: windmillGroup, type: 'windmill', initialZ: z });
+    }
+    
+    createCropField(x, z) {
+        const fieldGroup = new THREE.Group();
+        const colors = [0x9d7e3a, 0xb8984a, 0xa88b3d];
+        
+        for (let row = 0; row < 8; row++) {
+            const cropRow = new THREE.Mesh(
+                new THREE.BoxGeometry(3, 0.3, 0.4),
+                new THREE.MeshLambertMaterial({ color: colors[row % colors.length] })
+            );
+            cropRow.position.set(0, 0.15, -1.5 + row * 0.5);
+            fieldGroup.add(cropRow);
+        }
+        
+        fieldGroup.position.set(x, 0, z);
+        this.scene.add(fieldGroup);
+        this.objects.push({ mesh: fieldGroup, type: 'crops', initialZ: z });
+    }
+    
+    createFencePost(x, z) {
+        const fenceGroup = new THREE.Group();
+        
+        // Wooden fence posts
+        for (let i = 0; i < 5; i++) {
+            const post = new THREE.Mesh(
+                new THREE.BoxGeometry(0.1, 0.8, 0.1),
+                new THREE.MeshLambertMaterial({ color: 0x6b4423 })
+            );
+            post.position.set(i * 0.5, 0.4, 0);
+            fenceGroup.add(post);
+        }
+        
+        // Horizontal rails
+        const rail1 = new THREE.Mesh(
+            new THREE.BoxGeometry(2.5, 0.08, 0.08),
+            new THREE.MeshLambertMaterial({ color: 0x8b5a3c })
+        );
+        rail1.position.set(1, 0.5, 0);
+        fenceGroup.add(rail1);
+        
+        const rail2 = new THREE.Mesh(
+            new THREE.BoxGeometry(2.5, 0.08, 0.08),
+            new THREE.MeshLambertMaterial({ color: 0x8b5a3c })
+        );
+        rail2.position.set(1, 0.3, 0);
+        fenceGroup.add(rail2);
+        
+        fenceGroup.position.set(x, 0, z);
+        this.scene.add(fenceGroup);
+        this.objects.push({ mesh: fenceGroup, type: 'fence', initialZ: z });
+    }
+    
+    createHayBale(x, z) {
+        const hayGroup = new THREE.Group();
+        
+        // Cylindrical hay bale
+        const bale = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.5, 0.5, 0.6, 16),
+            new THREE.MeshLambertMaterial({ color: 0xdaa520 })
+        );
+        bale.rotation.z = Math.PI / 2;
+        bale.position.y = 0.5;
+        hayGroup.add(bale);
+        
+        // Binding straps
+        for (let i = 0; i < 2; i++) {
+            const strap = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.52, 0.52, 0.08, 16),
+                new THREE.MeshLambertMaterial({ color: 0x8b4513 })
+            );
+            strap.rotation.z = Math.PI / 2;
+            strap.position.set(0, 0.5, -0.2 + i * 0.4);
+            hayGroup.add(strap);
+        }
+        
+        hayGroup.position.set(x, 0, z);
+        this.scene.add(hayGroup);
+        this.objects.push({ mesh: hayGroup, type: 'hay', initialZ: z });
+    }
+    
+    update(worldSpeed) {
+        const time = Date.now() * 0.001;
+        
+        this.objects.forEach(obj => {
+            obj.mesh.position.z -= worldSpeed;
+            
+            if (obj.mesh.position.z < -50) {
+                obj.mesh.position.z += 350;
+            }
+            
+            // Animate windmill blades
+            if (obj.type === 'windmill' && obj.mesh.userData.blades) {
+                obj.mesh.userData.blades.forEach(blade => {
+                    blade.rotation.z += 0.02;
+                });
+            }
+            
+            // Gentle sway for crops
+            if (obj.type === 'crops') {
+                obj.mesh.rotation.z = Math.sin(time + obj.initialZ * 0.1) * 0.05;
+            }
+        });
+    }
+    
+    hide() {
+        this.objects.forEach(obj => {
+            obj.mesh.visible = false;
+        });
+    }
+    
+    fadeOut(progress) {
+        this.objects.forEach(obj => {
+            obj.mesh.traverse(child => {
+                if (child.material) {
+                    child.material.opacity = 1 - progress;
+                    child.material.transparent = true;
+                }
+            });
+            
+            if (progress > 0.8) {
+                obj.mesh.visible = false;
+            }
+        });
+    }
+    
+    fadeIn(progress) {
+        this.objects.forEach(obj => {
+            obj.mesh.visible = true;
+            obj.mesh.traverse(child => {
+                if (child.material) {
+                    child.material.opacity = progress;
+                    child.material.transparent = true;
+                }
+            });
+        });
+    }
+}
+
+Updated src/core/Game.js (Complete version with all systems)
+javascript
+
+import * as THREE from 'three';
+import { GameConfig } from '../config/GameConfig.js';
+import { SceneManager } from './SceneManager.js';
+import { Renderer } from './Renderer.js';
+import { InputHandler } from '../systems/InputHandler.js';
+import { CollisionDetector } from '../systems/CollisionDetector.js';
+import { CameraController } from '../systems/CameraController.js';
+import { UIManager } from '../systems/UIManager.js';
+import { PlayerCar } from '../entities/PlayerCar.js';
+import { Road } from '../environment/Road.js';
+import { BiomeManager } from '../environment/BiomeManager.js';
+import { TrafficManager } from '../entities/TrafficManager.js';
+import { Scenery } from '../environment/Scenery.js';
+import { Weather } from '../environment/Weather.js';
+
+export class Game {
+    constructor() {
+        this.gameOver = false;
+        this.distance = 0;
+        
+        this.init();
+    }
+    
+    init() {
+        // Core systems
+        this.sceneManager = new SceneManager();
+        this.renderer = new Renderer();
+        this.inputHandler = new InputHandler();
+        this.collisionDetector = new CollisionDetector();
+        this.uiManager = new UIManager();
+        
+        // Weather and environment
+        this.weather = new Weather(this.sceneManager.scene);
+        
+        // Camera
+        this.cameraController = new CameraController(this.sceneManager.camera);
+        
+        // Game entities
+        this.playerCar = new PlayerCar(this.sceneManager.scene);
+        this.road = new Road(this.sceneManager.scene);
+        this.trafficManager = new TrafficManager(this.sceneManager.scene);
+        this.scenery = new Scenery(this.sceneManager.scene);
+        this.biomeManager = new BiomeManager(this.sceneManager.scene);
+        
+        // Event listeners
+        this.setupEventListeners();
+        
+        // Start game loop
+        this.gameLoop();
+    }
+    
+    setupEventListeners() {
+        window.addEventListener('resize', () => this.onWindowResize());
+        document.getElementById('restart').addEventListener('click', () => this.restart());
+    }
+    
+    update() {
+        if (this.gameOver) return;
+        
+        const input = this.inputHandler.getInputState();
+        
+        if (input.noclip) {
+            this.handleNoclipMovement(input);
+            return;
+        }
+        
+        // Update player
+        this.playerCar.handleInput(input);
+        
+        // Update distance
+        this.distance += this.playerCar.speed;
+        
+        // Update world
+        this.road.update(this.playerCar.speed);
+        this.trafficManager.update(this.playerCar.speed, this.playerCar.position);
+        this.scenery.update(this.playerCar.speed);
+        this.biomeManager.update(this.distance, this.playerCar.speed);
+        this.weather.update();
+        
+        // Update camera
+        this.cameraController.update();
+        this.cameraController.follow(this.playerCar.group);
+        
+        // Collision detection
+        this.checkCollisions();
+        
+        // Update UI
+        this.updateUI();
+    }
+    
+    checkCollisions() {
+        // Traffic collisions
+        const trafficCollision = this.collisionDetector.checkTrafficCollisions(
+            this.playerCar.group,
+            this.trafficManager.getAllCars()
+        );
+        
+        if (trafficCollision) {
+            this.endGame();
+        }
+        
+        // Pothole collisions
+        const potholeHit = this.collisionDetector.checkPotholeCollision(
+            this.playerCar.group,
+            this.road.potholes
+        );
+        
+        if (potholeHit) {
+            this.playerCar.onPotholeHit();
+            this.uiManager.flashSpeedIndicator('#ff0000', 500);
+            this.cameraController.startShake(0.5, 300);
+            potholeHit.hitRecently = true;
+            setTimeout(() => potholeHit.hitRecently = false, 1000);
+        }
+    }
+    
+    updateUI() {
+        this.uiManager.updateSpeed(this.playerCar.speed);
+        this.uiManager.updateDistance(this.distance);
+        this.uiManager.updateRewindPower(
+            this.playerCar.rewindPower,
+            !this.playerCar.isMoving || this.playerCar.rewindPower < 90
+        );
+        this.uiManager.updateFPS();
+    }
+    
+    handleNoclipMovement(input) {
+        const camera = this.sceneManager.camera;
+        if (input.forward) camera.position.z += 5;
+        if (input.backward) camera.position.z -= 5;
+        if (input.left) camera.position.x += 0.5;
+        if (input.right) camera.position.x -= 0.5;
+    }
+    
+    render() {
+        this.renderer.render(this.sceneManager.scene, this.sceneManager.camera);
+    }
+    
+    gameLoop() {
+        requestAnimationFrame(() => this.gameLoop());
+        this.update();
+        this.render();
+    }
+    
+    endGame() {
+        this.gameOver = true;
+        this.uiManager.showGameOver(this.distance);
+    }
+    
+    restart() {
+        window.location.reload();
+    }
+    
+    onWindowResize() {
+        this.cameraController.onWindowResize(window.innerWidth, window.innerHeight);
+        this.renderer.onWindowResize(window.innerWidth, window.innerHeight);
+    }
+}

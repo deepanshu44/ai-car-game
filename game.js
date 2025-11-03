@@ -1,5 +1,9 @@
 // game.js
 let count = 1
+let lastTime = performance.now();
+let frameCount = 0;
+let fps = 0;
+
 class CarGame {
     constructor() {
 	this.scene = null;
@@ -37,6 +41,18 @@ class CarGame {
 	
 	this.keys = {};
 	this.noclipMode = false;
+
+	// Biome system
+	this.currentBiome = 'city';
+	this.targetBiome = 'city';
+	this.biomeTransitionDistance = 300;
+	this.nextBiomeSwitch = 300;
+	this.biomeFarmlandObjects = [];
+	this.isTransitioning = false;
+	this.transitionProgress = 0;
+	this.transitionSpeed = 0.01; // Slow, smooth transition
+	this.transitionStartDistance = 0;
+	this.transitionZoneLength = 200; 
 	
 	this.laneWidth = 5;
 	this.playerLane = 2.25;
@@ -98,6 +114,8 @@ class CarGame {
 	this.createPlayerCarLights();
 	this.spawnScenery();
 	this.createClouds();  // Clouds at night (optional, can remove)
+	this.spawnFarmlandScenery(); // ADD THIS - Pre-spawn farmland (hidden)
+	this.clearFarmlandScenery();
 	this.spawnTraffic();
 	
 	// Event listeners
@@ -594,13 +612,14 @@ class CarGame {
 	
 	// Crosswalk lines (zebra crossing)
 	const crosswalkMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
-	for (let i = 0; i < 10; i++) {
+	for (let i = 0; i < 6; i++) {
             const line = new THREE.Mesh(
 		new THREE.PlaneGeometry(1.8, 24),
 		crosswalkMaterial
             );
             line.rotation.x = -Math.PI / 2;
-            line.position.set(-14 + i * 3.2, 0.03, 0);
+            // line.position.set(-14 + i * 3.2, 0.03, 0);
+            line.position.set(-8 + i * 3.2, 0.03, 0);
             intersectionGroup.add(line);
 	}
 	
@@ -697,7 +716,8 @@ class CarGame {
 	if (text === 'STOP') {
             boardGeometry = new THREE.CylinderGeometry(0.8, 0.8, 0.1, 8);
             boardColor = 0xff0000;
-	} else {
+	}
+	else {
             boardGeometry = new THREE.ConeGeometry(0.8, 1.4, 3);
             boardColor = 0xffff00;
 	}
@@ -705,7 +725,9 @@ class CarGame {
 	const boardMaterial = new THREE.MeshLambertMaterial({ color: boardColor });
 	const board = new THREE.Mesh(boardGeometry, boardMaterial);
 	board.position.y = 2.8;
+	board.position.z = -0.1;
 	board.rotation.y = Math.PI / 2;
+	board.rotation.x = Math.PI / 2;
 	if (text === 'YIELD') board.rotation.z = Math.PI;
 	signGroup.add(board);
 	
@@ -725,7 +747,9 @@ class CarGame {
             border.rotation.z = Math.PI;
 	}
 	border.position.y = 2.8;
+	border.position.z = -0.1;
 	border.rotation.y = Math.PI / 2;
+	border.rotation.x = Math.PI / 2;
 	signGroup.add(border);
 	
 	signGroup.position.set(x, 0, z);
@@ -833,7 +857,7 @@ class CarGame {
     
     createLaneMarkers() {
 	const markerGeometry = new THREE.BoxGeometry(0.3, 0.1, 3);
-	const markerMaterial = new THREE.MeshLambertMaterial({ color: 0xffff00 });
+	const markerMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff }); // 0xffff00 0xffffbb
 	
 	// Lane markers at -4.5 (between left lanes) and 4.5 (between right lanes)
 	// Don't put markers at 0 (that's where the divider is)
@@ -842,7 +866,7 @@ class CarGame {
 	for (let z = -600; z < 600; z += 10) {
             markerPositions.forEach(x => {
 		const marker = new THREE.Mesh(markerGeometry, markerMaterial);
-		marker.position.set(x, 0.05, z);
+		marker.position.set(x, 0, z);
 		this.scene.add(marker);
 		this.scenery.push({ mesh: marker, type: 'marker' });
             });
@@ -871,28 +895,45 @@ class CarGame {
     createRoadDivider() {
 	this.roadDividers = [];
 	
-	// Create dividers in specific sections, avoiding intersections completely
-	const dividerSections = [
-            { start: -250, end: 70 },      // Before first intersection
-            { start: 160, end: 250 },      // After first intersection, before bridge
-            // Gap for bridge at ~180
-            { start: 210, end: 250 }       // After bridge
-	];
-	
-	for (let i = 0; i < 3; i++) {
-            dividerSections.forEach(section => {
-		const dividerGroup = this.createDividerSegment(section.start, section.end);
-		dividerGroup.position.set(0, 0, i * 500 - 500);
-		this.scene.add(dividerGroup);
-		this.roadDividers.push(dividerGroup);
-            });
+	// Create divider segments, checking each position with isInRestrictedZone
+	for (let baseOffset = 0; baseOffset < 3; baseOffset++) {
+            const baseZ = baseOffset * 500 - 500;
+            
+            let segmentStart = null;
+            
+            // Check every 10 units for divider placement
+            for (let localZ = -250; localZ <= 250; localZ += 10) {
+		const absoluteZ = baseZ + localZ;
+		const inZone = this.isInRestrictedZone(0, absoluteZ); // x=0 for center divider
+		
+		if (!inZone && segmentStart === null) {
+                    // Not in restricted zone, start a new segment
+                    segmentStart = localZ;
+		} else if (inZone && segmentStart !== null) {
+                    // Entered restricted zone, end current segment
+                    const dividerSegment = this.createDividerSegment(segmentStart, localZ - 10);
+                    dividerSegment.position.set(0, 0, baseZ);
+                    this.scene.add(dividerSegment);
+                    this.roadDividers.push(dividerSegment);
+                    segmentStart = null;
+		} else if (localZ === 250 && segmentStart !== null) {
+                    // End of range, close the segment
+                    const dividerSegment = this.createDividerSegment(segmentStart, localZ);
+                    dividerSegment.position.set(0, 0, baseZ);
+                    this.scene.add(dividerSegment);
+                    this.roadDividers.push(dividerSegment);
+                    segmentStart = null;
+		}
+            }
 	}
     }
 
     createDividerSegment(startZ, endZ) {
 	const dividerGroup = new THREE.Group();
 	const length = endZ - startZ;
-	const centerZ = (startZ + endZ) / 2;
+	
+	// Only create if segment is meaningful
+	if (length < 10) return dividerGroup;
 	
 	// Main concrete barrier
 	const barrierShape = new THREE.Shape();
@@ -936,6 +977,7 @@ class CarGame {
 	}
 	
 	// Yellow stripe
+	const centerZ = (startZ + endZ) / 2;
 	const stripeGeometry = new THREE.BoxGeometry(0.45, 0.08, length);
 	const stripeMaterial = new THREE.MeshLambertMaterial({ color: 0xffcc00 });
 	const stripe = new THREE.Mesh(stripeGeometry, stripeMaterial);
@@ -1035,19 +1077,19 @@ class CarGame {
 	this.roadFences = [];
 	
 	// Updated structure zones - REMOVED island intersection
-	const structureZones = [
-            { start: 110, end: 130 },   // Live intersection at ~120
-            // { start: 175, end: 195 },   // Bridge at ~180
-            // { start: 370, end: 395 }      // Live intersection at ~380 (wraps to ~30)
-            { start: 290, end: 310 }      // Live intersection at ~300 (wraps to ~30)
-	];
+	// const structureZones = [
+        //     { start: 110, end: 130 },   // Live intersection at ~120
+        //     // { start: 175, end: 195 },   // Bridge at ~180
+        //     // { start: 370, end: 395 }      // Live intersection at ~380 (wraps to ~30)
+        //     { start: 290, end: 310 }      // Live intersection at ~300 (wraps to ~30)
+	// ];
 	
-	const isInStructureZone = (z) => {
-            const normalizedZ = ((z % 350) + 350) % 350;
-            return structureZones.some(zone => 
-		normalizedZ >= zone.start && normalizedZ <= zone.end
-            );
-	};
+	// const isInStructureZone = (z) => {
+        //     const normalizedZ = ((z % 350) + 350) % 350;
+        //     return structureZones.some(zone => 
+	// 	normalizedZ >= zone.start && normalizedZ <= zone.end
+        //     );
+	// };
 	
 	// Create fences for both sides
 	for (let side of [-1, 1]) {
@@ -1060,7 +1102,8 @@ class CarGame {
 		
 		for (let localZ = -250; localZ <= 250; localZ += 5) {
                     const absoluteZ = baseZ + localZ;
-                    const inZone = isInStructureZone(absoluteZ);
+                    // const inZone = isInStructureZone(absoluteZ);
+                    const inZone = this.isInRestrictedZone(0, absoluteZ);
                     
                     if (!inZone && segmentStart === null) {
 			segmentStart = localZ;
@@ -1133,9 +1176,9 @@ class CarGame {
         const dividerGroup = new THREE.Group();
         // Add horizontal colored stripe (yellow safety stripe)
         const stripeGeometry = new THREE.BoxGeometry(0.45, 0.08, 500);
-        const stripeMaterial = new THREE.MeshLambertMaterial({ color: 0xffffbb });
+        const stripeMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
         const stripe = new THREE.Mesh(stripeGeometry, stripeMaterial);
-        stripe.position.set(0, 0.4, 0);
+        stripe.position.set(0, 0, 0);
         dividerGroup.add(stripe);
         // dividerGroup.position.set(9, 0, 0);
         dividerGroup.position.set(x, 0, 0);
@@ -1384,41 +1427,24 @@ class CarGame {
     }
 
     // Helper method - need to make isInRestrictedZone accessible
-    isInRestrictedZone(z) {
+    isInRestrictedZone(x, z) {
 	const normalizedZ = ((z % 350) + 350) % 350;
-	const bridgeZones = [
-            { start: 165, end: 195 },
-            { start: 435, end: 465 }
-	];
 	
-	// const intersectionZones = [
-        //     { start: 105, end: 135 },
-        //     { start: 365, end: 395 }
+	// const bridgeZones = [
+        //     { start: 175, end: 195 }     // Bridge at ~180
 	// ];
+	
 	const intersectionZones = [
-            { start: 110, end: 130 },   // Live intersection at ~120
-            { start: 290, end: 310 }      // Live intersection at ~300 (wraps to ~30)
+            { start: 110, end: 130 },    // Intersection at ~120
+            { start: 290, end: 310 }     // Intersection at ~300
 	];
-	
-	for (let bridge of bridgeZones) {
-            const bridgeStart = bridge.start % 350;
-            const bridgeEnd = bridge.end % 350;
-            if (normalizedZ >= bridgeStart && normalizedZ <= bridgeEnd) {
-		// if (x >= -45 && x <= 45)
-		return true;
-            }
-	}
-	
+
+	// Check intersections
 	for (let intersection of intersectionZones) {
-            const intStart = intersection.start % 350;
-            const intEnd = intersection.end % 350;
-            if (normalizedZ >= intStart && normalizedZ <= intEnd) {
-		// if (x >= -45 && x <= 45)
-		return true;
+            if (normalizedZ >= intersection.start && normalizedZ <= intersection.end) {
+		if (x >= -45 && x <= 45) return true;
             }
 	}
-	
-	if (Math.abs(normalizedZ - 100) < 20) return true;
 	
 	return false;
     }
@@ -1705,7 +1731,7 @@ class CarGame {
 	// Place lamps on both sides of the road - LESS DENSE
 	for (let z = -50; z < 350; z += 40) {  // CHANGED: from 25 to 40
             // Left side of road
-	    if (!this.isInRestrictedZone(z)) {
+	    if (!this.isInRestrictedZone(0,z)) {
 		this.createStreetLamp(-9.5, z);
 		// Right side of road
 		
@@ -1855,7 +1881,7 @@ class CarGame {
     createNightSky() {
 	// Change sky to dark blue/black
 	this.scene.background = new THREE.Color(0x000011); //0x0a0a1a 0x000011
-	// this.scene.fog = new THREE.Fog(0x000011, 2000, 2000);  // CHANGED: Thicker fog, darker color, closer range
+	this.scene.fog = new THREE.Fog(0x000011, 1, 2);  // CHANGED: Thicker fog, darker color, closer range
 	
 	// Create starfield - REDUCED
 	const starGeometry = new THREE.BufferGeometry();
@@ -1930,8 +1956,8 @@ class CarGame {
 	// };
 	
 	// Trees and bushes along the road - with zone checking
-	for (let z = -50; z < 300; z += 12) {
-            if (!this.isInRestrictedZone(z)) {  // ADDED CHECK
+	for (let z = -50; z < 350; z += 12) {
+            if (!this.isInRestrictedZone(0,z)) {  // ADDED CHECK
 		if (Math.random() > 0.4) {
                     this.createTree(-10 - Math.random() * 5, z);
 		} else {
@@ -1948,7 +1974,7 @@ class CarGame {
 	
 	// Additional bushes near road edge - with zone checking
 	for (let z = -50; z < 300; z += 15) {
-            if (!this.isInRestrictedZone(z)) {  // ADDED CHECK
+            if (!this.isInRestrictedZone(0,z)) {  // ADDED CHECK
 		if (Math.random() > 0.5) {
                     this.createBush(-11 - Math.random() * 2, z);
 		}
@@ -1960,7 +1986,7 @@ class CarGame {
 	
 	// Background trees - with zone checking
 	for (let z = -50; z < 300; z += 25) {
-            if (!this.isInRestrictedZone(z)) {  // ADDED CHECK
+            if (!this.isInRestrictedZone(0,z)) {  // ADDED CHECK
 		if (Math.random() > 0.6) {
                     this.createTree(-20 - Math.random() * 10, z);
 		}
@@ -1972,7 +1998,7 @@ class CarGame {
 	
 	// Dense bush clusters in far background - with zone checking
 	for (let z = -50; z < 300; z += 20) {
-            if (!this.isInRestrictedZone(z)) {  // ADDED CHECK
+            if (!this.isInRestrictedZone(0,z)) {  // ADDED CHECK
 		if (Math.random() > 0.5) {
                     this.createBush(-18 - Math.random() * 8, z);
 		}
@@ -1984,7 +2010,7 @@ class CarGame {
 	
 	// Scattered tree groups - with zone checking
 	for (let z = 0; z < 300; z += 50) {
-            if (!this.isInRestrictedZone(z)) {  // ADDED CHECK
+            if (!this.isInRestrictedZone(0,z)) {  // ADDED CHECK
 		const clusterX = (Math.random() > 0.5 ? 1 : -1) * (15 + Math.random() * 10);
 		for (let i = 0; i < 2; i++) {
                     this.createTree(
@@ -2213,6 +2239,469 @@ class CarGame {
 	this.scene.add(carGroup);
 	this.traffic.push({ mesh: carGroup, speed: 0.5 + Math.random() * 0.3, lane: laneX });
     }
+
+    createFarm(x, z) {
+	const farmGroup = new THREE.Group();
+	
+	// Barn building
+	const barnBodyGeometry = new THREE.BoxGeometry(6, 4, 5);
+	const barnBodyMaterial = new THREE.MeshLambertMaterial({ color: 0x8b0000 }); // Dark red
+	const barnBody = new THREE.Mesh(barnBodyGeometry, barnBodyMaterial);
+	barnBody.position.y = 2;
+	barnBody.castShadow = false;
+	farmGroup.add(barnBody);
+	
+	// Barn roof (triangular)
+	const roofShape = new THREE.Shape();
+	roofShape.moveTo(-3, 0);
+	roofShape.lineTo(0, 2);
+	roofShape.lineTo(3, 0);
+	roofShape.lineTo(-3, 0);
+	
+	const roofGeometry = new THREE.ExtrudeGeometry(roofShape, {
+            steps: 1,
+            depth: 5,
+            bevelEnabled: false
+	});
+	const roofMaterial = new THREE.MeshLambertMaterial({ color: 0x4a4a4a });
+	const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+	roof.rotation.x = Math.PI / 2;
+	roof.position.set(0, 4, -2.5);
+	farmGroup.add(roof);
+	
+	// Barn door
+	const doorGeometry = new THREE.BoxGeometry(1.5, 2.5, 0.1);
+	const doorMaterial = new THREE.MeshLambertMaterial({ color: 0x3d2817 });
+	const door = new THREE.Mesh(doorGeometry, doorMaterial);
+	door.position.set(0, 1.25, 2.55);
+	farmGroup.add(door);
+	
+	// White cross on barn
+	const crossH = new THREE.Mesh(
+            new THREE.BoxGeometry(1, 0.2, 0.1),
+            new THREE.MeshLambertMaterial({ color: 0xffffff })
+	);
+	crossH.position.set(0, 3, 2.6);
+	farmGroup.add(crossH);
+	
+	const crossV = new THREE.Mesh(
+            new THREE.BoxGeometry(0.2, 1, 0.1),
+            new THREE.MeshLambertMaterial({ color: 0xffffff })
+	);
+	crossV.position.set(0, 3, 2.6);
+	farmGroup.add(crossV);
+	
+	farmGroup.position.set(x, 0, z);
+	this.scene.add(farmGroup);
+	this.biomeFarmlandObjects.push({ mesh: farmGroup, type: 'barn', initialZ: z });
+    }
+
+    createSilo(x, z) {
+	const siloGroup = new THREE.Group();
+	
+	// Main cylinder
+	const siloGeometry = new THREE.CylinderGeometry(1, 1, 5, 16);
+	const siloMaterial = new THREE.MeshLambertMaterial({ color: 0xc0c0c0 }); // Silver
+	const silo = new THREE.Mesh(siloGeometry, siloMaterial);
+	silo.position.y = 2.5;
+	siloGroup.add(silo);
+	
+	// Dome top
+	const domeGeometry = new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+	const domeMaterial = new THREE.MeshLambertMaterial({ color: 0xa0a0a0 });
+	const dome = new THREE.Mesh(domeGeometry, domeMaterial);
+	dome.position.y = 5;
+	siloGroup.add(dome);
+	
+	// Horizontal bands
+	for (let i = 0; i < 4; i++) {
+            const band = new THREE.Mesh(
+		new THREE.CylinderGeometry(1.05, 1.05, 0.15, 16),
+		new THREE.MeshLambertMaterial({ color: 0x808080 })
+            );
+            band.position.y = 1 + i * 1.2;
+            siloGroup.add(band);
+	}
+	
+	siloGroup.position.set(x, 0, z);
+	this.scene.add(siloGroup);
+	this.biomeFarmlandObjects.push({ mesh: siloGroup, type: 'silo', initialZ: z });
+    }
+
+    createWindmill(x, z) {
+	const windmillGroup = new THREE.Group();
+	
+	// Tower (cone shape)
+	const towerGeometry = new THREE.CylinderGeometry(0.5, 1, 4, 8);
+	const towerMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
+	const tower = new THREE.Mesh(towerGeometry, towerMaterial);
+	tower.position.y = 2;
+	windmillGroup.add(tower);
+	
+	// Nacelle (top box)
+	const nacelleGeometry = new THREE.BoxGeometry(0.8, 0.6, 1.2);
+	const nacelleMaterial = new THREE.MeshLambertMaterial({ color: 0xe0e0e0 });
+	const nacelle = new THREE.Mesh(nacelleGeometry, nacelleMaterial);
+	nacelle.position.y = 4.3;
+	windmillGroup.add(nacelle);
+	
+	// Blades hub
+	const hubGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.3, 16);
+	const hubMaterial = new THREE.MeshLambertMaterial({ color: 0x404040 });
+	const hub = new THREE.Mesh(hubGeometry, hubMaterial);
+	hub.rotation.z = Math.PI / 2;
+	hub.position.set(0, 4.3, 0.8);
+	windmillGroup.add(hub);
+	
+	// 3 Blades
+	const bladeMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
+	for (let i = 0; i < 3; i++) {
+            const bladeGeometry = new THREE.BoxGeometry(0.1, 2, 0.4);
+            const blade = new THREE.Mesh(bladeGeometry, bladeMaterial);
+            blade.position.y = 1;
+            
+            const bladeArm = new THREE.Group();
+            bladeArm.add(blade);
+            bladeArm.rotation.z = (i * Math.PI * 2) / 3;
+            bladeArm.position.set(0, 4.3, 0.8);
+            windmillGroup.add(bladeArm);
+            
+            // Store reference for animation
+            if (!windmillGroup.userData.blades) windmillGroup.userData.blades = [];
+            windmillGroup.userData.blades.push(bladeArm);
+	}
+	
+	windmillGroup.position.set(x, 0, z);
+	this.scene.add(windmillGroup);
+	this.biomeFarmlandObjects.push({ mesh: windmillGroup, type: 'windmill', initialZ: z });
+    }
+
+    createCropField(x, z) {
+	const fieldGroup = new THREE.Group();
+	
+	// Crop rows (alternating colors for wheat/corn look)
+	const colors = [0x9d7e3a, 0xb8984a, 0xa88b3d]; // Different wheat shades
+	
+	for (let row = 0; row < 8; row++) {
+            const rowGeometry = new THREE.BoxGeometry(3, 0.3, 0.4);
+            const rowMaterial = new THREE.MeshLambertMaterial({ 
+		color: colors[row % colors.length] 
+            });
+            const cropRow = new THREE.Mesh(rowGeometry, rowMaterial);
+            cropRow.position.set(0, 0.15, -1.5 + row * 0.5);
+            fieldGroup.add(cropRow);
+	}
+	
+	fieldGroup.position.set(x, 0, z);
+	this.scene.add(fieldGroup);
+	this.biomeFarmlandObjects.push({ mesh: fieldGroup, type: 'crops', initialZ: z });
+    }
+
+    createFencePost(x, z) {
+	const fenceGroup = new THREE.Group();
+	
+	// Wooden fence
+	for (let i = 0; i < 5; i++) {
+            const postGeometry = new THREE.BoxGeometry(0.1, 0.8, 0.1);
+            const postMaterial = new THREE.MeshLambertMaterial({ color: 0x6b4423 });
+            const post = new THREE.Mesh(postGeometry, postMaterial);
+            post.position.set(i * 0.5, 0.4, 0);
+            fenceGroup.add(post);
+	}
+	
+	// Horizontal rails
+	const railGeometry = new THREE.BoxGeometry(2.5, 0.08, 0.08);
+	const railMaterial = new THREE.MeshLambertMaterial({ color: 0x8b5a3c });
+	
+	const rail1 = new THREE.Mesh(railGeometry, railMaterial);
+	rail1.position.set(1, 0.5, 0);
+	fenceGroup.add(rail1);
+	
+	const rail2 = new THREE.Mesh(railGeometry, railMaterial);
+	rail2.position.set(1, 0.3, 0);
+	fenceGroup.add(rail2);
+	
+	fenceGroup.position.set(x, 0, z);
+	this.scene.add(fenceGroup);
+	this.biomeFarmlandObjects.push({ mesh: fenceGroup, type: 'fence', initialZ: z });
+    }
+
+    createHayBale(x, z) {
+	const hayGroup = new THREE.Group();
+	
+	// Cylindrical hay bale
+	const baleGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.6, 16);
+	const baleMaterial = new THREE.MeshLambertMaterial({ color: 0xdaa520 }); // Golden
+	const bale = new THREE.Mesh(baleGeometry, baleMaterial);
+	bale.rotation.z = Math.PI / 2;
+	bale.position.y = 0.5;
+	hayGroup.add(bale);
+	
+	// Binding straps
+	for (let i = 0; i < 2; i++) {
+            const strap = new THREE.Mesh(
+		new THREE.CylinderGeometry(0.52, 0.52, 0.08, 16),
+		new THREE.MeshLambertMaterial({ color: 0x8b4513 })
+            );
+            strap.rotation.z = Math.PI / 2;
+            strap.position.set(0, 0.5, -0.2 + i * 0.4);
+            hayGroup.add(strap);
+	}
+	
+	hayGroup.position.set(x, 0, z);
+	this.scene.add(hayGroup);
+	this.biomeFarmlandObjects.push({ mesh: hayGroup, type: 'hay', initialZ: z });
+    }
+
+    spawnFarmlandScenery() {
+	// Clear existing farmland objects
+	this.biomeFarmlandObjects.forEach(obj => {
+            this.scene.remove(obj.mesh);
+	});
+	this.biomeFarmlandObjects = [];
+	
+	// Spawn farms and silos
+	this.createFarm(-20, 50);
+	this.createFarm(22, 140);
+	this.createSilo(-25, 80);
+	this.createSilo(18, 200);
+	
+	// Windmills (fewer, more spread out)
+	this.createWindmill(-28, 160);
+	this.createWindmill(25, 240);
+	
+	// Crop fields
+	for (let z = 40; z < 280; z += 40) {
+            if (!this.isInRestrictedZone(-15, z)) {
+		this.createCropField(-15, z);
+            }
+            if (!this.isInRestrictedZone(15, z)) {
+		this.createCropField(15, z);
+            }
+	}
+	
+	// Wooden fences along fields
+	for (let z = 35; z < 280; z += 15) {
+            if (!this.isInRestrictedZone(-11, z)) {
+		this.createFencePost(-11, z);
+            }
+            if (!this.isInRestrictedZone(11, z)) {
+		this.createFencePost(11, z);
+            }
+	}
+	
+	// Hay bales scattered
+	const hayPositions = [
+            { x: -12, z: 70 },
+            { x: -14, z: 110 },
+            { x: 13, z: 90 },
+            { x: 15, z: 150 },
+            { x: -13, z: 180 },
+            { x: 12, z: 220 }
+	];
+	
+	hayPositions.forEach(pos => {
+            if (!this.isInRestrictedZone(pos.x, pos.z)) {
+		this.createHayBale(pos.x, pos.z);
+            }
+	});
+    }
+
+    clearFarmlandScenery() {
+	this.biomeFarmlandObjects.forEach(obj => {
+            obj.mesh.visible = false;
+	});
+    }
+
+    updateBiome() {
+	// Check if we should START a transition
+	if (!this.isTransitioning && this.distance >= this.nextBiomeSwitch - this.transitionZoneLength) {
+            this.isTransitioning = true;
+            this.transitionStartDistance = this.distance;
+            this.transitionProgress = 0;
+            this.targetBiome = this.currentBiome === 'city' ? 'farmland' : 'city';
+            
+            // Start showing notification early
+            this.showBiomeNotification(`APPROACHING ${this.targetBiome.toUpperCase()}`);
+	}
+	
+	// Update transition progress
+	if (this.isTransitioning) {
+            // Calculate progress based on distance traveled in transition zone
+            const distanceInTransition = this.distance - this.transitionStartDistance;
+            this.transitionProgress = Math.min(distanceInTransition / this.transitionZoneLength, 1);
+            
+            // Apply gradual transition
+            this.applyBiomeTransition(this.transitionProgress);
+            
+            // Complete transition
+            if (this.transitionProgress >= 1) {
+		this.isTransitioning = false;
+		this.currentBiome = this.targetBiome;
+		this.nextBiomeSwitch += this.biomeTransitionDistance;
+            }
+	}
+    }
+
+    applyBiomeTransition(progress) {
+	// Smooth easing function (ease-in-out)
+	const eased = progress < 0.5 
+              ? 2 * progress * progress 
+              : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+	
+	if (this.targetBiome === 'farmland') {
+            // Transitioning TO farmland
+            this.transitionToCityToFarmland(eased);
+	} else {
+            // Transitioning TO city
+            this.transitionToFarmlandToCity(eased);
+	}
+    }
+
+    transitionToCityToFarmland(progress) {
+	// Gradually fade out city scenery
+	this.scenery.forEach(item => {
+            if (item.type === 'tree' || item.type === 'bush' || 
+		item.type === 'house') {
+		item.mesh.traverse(child => {
+                    if (child.material) {
+			child.material.opacity = 1 - progress;
+			child.material.transparent = true;
+                    }
+		});
+		// this.currentBiome === 'city' ? 'farmland' : 'city'
+		// Hide completely when mostly faded
+		if (progress > 0.8) {
+                    item.mesh.visible = false;
+		}
+            }
+	});
+	
+	// Gradually fade in farmland scenery
+	this.biomeFarmlandObjects.forEach(obj => {
+            obj.mesh.visible = true;
+            obj.mesh.traverse(child => {
+		if (child.material) {
+                    child.material.opacity = progress;
+                    child.material.transparent = true;
+		}
+            });
+	});
+	
+	// Gradually change sky color
+	const cityColor = new THREE.Color(0x0a0a1a);
+	const farmColor = new THREE.Color(0x87a96b);
+	const currentColor = cityColor.clone().lerp(farmColor, progress);
+	
+	this.scene.background = currentColor;
+	if (this.scene.fog) {
+            this.scene.fog.color = currentColor;
+	}
+	
+	// Fade street lamps
+	if (this.roadFences) {
+            this.roadFences.forEach(fence => {
+		fence.traverse(child => {
+                    if (child.material && child.material.emissive) {
+			child.material.emissiveIntensity = 1 - progress;
+                    }
+		});
+            });
+	}
+    }
+
+    transitionToFarmlandToCity(progress) {
+	// Gradually fade out farmland scenery
+	this.biomeFarmlandObjects.forEach(obj => {
+            obj.mesh.traverse(child => {
+		if (child.material) {
+                    child.material.opacity = 1 - progress;
+                    child.material.transparent = true;
+		}
+            });
+            
+            // Hide completely when mostly faded
+            if (progress > 0.8) {
+		obj.mesh.visible = false;
+            }
+	});
+	
+	// Gradually fade in city scenery
+	this.scenery.forEach(item => {
+            if (item.type === 'tree' || item.type === 'bush' || 
+		item.type === 'house') {
+		item.mesh.visible = true;
+		item.mesh.traverse(child => {
+                    if (child.material) {
+			child.material.opacity = progress;
+			child.material.transparent = true;
+                    }
+		});
+            }
+	});
+	
+	// Gradually change sky color
+	const farmColor = new THREE.Color(0x87a96b);
+	const cityColor = new THREE.Color(0x0a0a1a);
+	const currentColor = farmColor.clone().lerp(cityColor, progress);
+	
+	this.scene.background = currentColor;
+	if (this.scene.fog) {
+            this.scene.fog.color = currentColor;
+	}
+	
+	// Fade in street lamps
+	if (this.roadFences) {
+            this.roadFences.forEach(fence => {
+		fence.traverse(child => {
+                    if (child.material && child.material.emissive) {
+			child.material.emissiveIntensity = progress;
+                    }
+		});
+            });
+	}
+    }
+
+    showBiomeNotification(text) {
+	const notification = document.createElement('div');
+	notification.textContent = text;
+	notification.style.position = 'fixed';
+	notification.style.top = '20%';
+	notification.style.left = '50%';
+	notification.style.transform = 'translate(-50%, -50%)';
+	notification.style.fontSize = '32px';
+	notification.style.fontWeight = 'bold';
+	notification.style.color = '#ffffff';
+	notification.style.textShadow = '0 0 20px rgba(0,0,0,0.8)';
+	notification.style.zIndex = '100';
+	notification.style.pointerEvents = 'none';
+	notification.style.animation = 'biomeNotification 4s ease-out';
+	notification.style.background = 'rgba(0,0,0,0.5)';
+	notification.style.padding = '15px 30px';
+	notification.style.borderRadius = '10px';
+	
+	document.body.appendChild(notification);
+	
+	setTimeout(() => notification.remove(), 4000);
+    }
+
+    animateFarmlandObjects() {
+	const time = Date.now() * 0.001;
+	
+	this.biomeFarmlandObjects.forEach(obj => {
+            if (obj.type === 'windmill' && obj.mesh.userData.blades) {
+		// Rotate windmill blades
+		obj.mesh.userData.blades.forEach(blade => {
+                    blade.rotation.z += 0.02;
+		});
+            }
+            
+            if (obj.type === 'crops') {
+		// Gentle sway for crops
+		obj.mesh.rotation.z = Math.sin(time + obj.initialZ * 0.1) * 0.05;
+            }
+	});
+    }
     
     handleInput() {
 	if (this.gameOver) return;
@@ -2353,8 +2842,8 @@ class CarGame {
 	// Update road dividers - WITH INTERSECTION HIDING
 	this.roadDividers.forEach(divider => {
             divider.position.z -= worldSpeed;
-            if (divider.position.z < -500) {
-		divider.position.z += 1500;
+            if (divider.position.z < -50) {
+		divider.position.z += 350;
             }
             
             // Hide dividers in intersection zones - NEW
@@ -2397,6 +2886,7 @@ class CarGame {
             if (item.mesh.position.z < -50) {
 		item.mesh.position.z += 350;
             }
+	    // console.log(this.scenery)
 	});
 
 	// Update potholes
@@ -2467,6 +2957,23 @@ class CarGame {
 		police.mesh.position.z += 350;
             }
 	});
+
+	// Update biome
+	this.updateBiome();
+
+	// Update farmland objects 
+	if (this.currentBiome === 'farmland') {
+            this.biomeFarmlandObjects.forEach(obj => {
+		obj.mesh.position.z -= worldSpeed;
+		
+		if (obj.mesh.position.z < -50) {
+                    obj.mesh.position.z += 350;
+		}
+            });
+            
+            // Animate farmland objects
+            this.animateFarmlandObjects();
+	}
 	
 	// Update camera
 	this.camera.position.x = this.playerCar.position.x;
@@ -2535,6 +3042,15 @@ class CarGame {
 		this.endGame();
             }
 	});
+	frameCount++;
+	const now = performance.now();
+	if (now >= lastTime + 1000) {
+            fps = frameCount;
+            frameCount = 0;
+            lastTime = now;
+            document.getElementById('fps').textContent = `FPS: ${fps}`;
+	}
+
     }
     
     endGame() {

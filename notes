@@ -1,78 +1,9 @@
-## update
-```
+add scifi going through the sky with tall builds visible up and down diminishing in the fog
 
----
+very infrequently police appears so slow(to speed limit) car down
 
-## **How This Works:**
+speedboost gained by driving for a few kms, on complete filling, will lift the car up and make it move very fast 
 
-### **1. Pre-Loading (No Hanging)**
-- All farmland objects spawn at game start (hidden)
-- No mid-game creation causing performance spikes
+let the car build up as the player goes deeper in into the level
 
-### **2. Transition Zone (200 units)**
-```
-Distance:  800 --------- 1000 --------- 1200
-           City    Transition   Farmland
-
-Progress:  0% ---------- 100% ----------
-           City fades    Farmland fades
-           out slowly    in slowly
-
-## **What This Adds:**
-
-### **Farmland Biome Objects:**
-
-1. **Barns** - Red buildings with triangular roofs and white cross
-2. **Silos** - Silver cylindrical grain silos with dome tops
-3. **Windmills** - White towers with rotating 3-blade turbines
-4. **Crop Fields** - Rows of golden wheat/corn
-5. **Wooden Fences** - Brown fence posts along fields
-6. **Hay Bales** - Golden cylindrical bales with straps
-
-### **Biome System:**
-
-- **Switches every 1000 distance units** (~1 kilometer)
-- **Alternates**: City → Farmland → City → Farmland...
-- **City scenery hidden** when in farmland (trees, houses, bushes)
-- **Farmland scenery hidden** when in city
-
-### **Visual Changes:**
-
-**City Mode:**
-- Dark night sky (0x0a0a1a)
-- Street lamps, houses, trees, bushes
-- Urban atmosphere
-
-**Farmland Mode:**
-- Lighter green-brown sky (0x87a96b)
-- Farms, silos, windmills, crops, fences
-- Rural atmosphere
-- Windmills rotate continuously
-- Crops gently sway
-
-### **Transitions:**
-
-- **3-second notification**: "ENTERING FARMLAND" or "ENTERING CITY"
-- **Smooth fade** animation
-- **Sky color change**
-- **Scenery swap** (instant toggle for performance)
-
-### **Player Experience:**
-```
-Start: City (dark night, streetlamps, buildings)
-↓
-Drive 1000m
-↓
-"ENTERING FARMLAND" notification
-↓
-Farmland (lighter sky, farms, windmills, crops)
-↓
-Drive another 1000m
-↓
-"ENTERING CITY" notification
-↓
-Back to city... cycle continues
-
-The game now has variety and progression with two distinct environments! 🌆🌾
-
-
+refactor code to make it more modular, eg multiple updates call for every with similar functionality

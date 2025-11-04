@@ -9,24 +9,34 @@
   </head>
   <body>
     <div id="game-container">
+      <div class="speedometer">
+	
+      <div id="ui">
+	<div id="parked">(P)</div>
+	<div class="abstract-design left">
+	  <div id="abstract"></div>
+	  <div id="abstract"></div>
+	  <div id="abstract"></div>
+	</div>
+        <div id="speed">km/h</div>
+        <div id="distance">0 m</div>
+	<div class="abstract-design right">
+	  <div id="abstract"></div>
+	  <div id="abstract"></div>
+	  <div id="abstract"></div>
+	</div>
+	<div id="battery">BAT: <span>|||||||||</span></div>
+      </div>
+      </div>
       <div class="menu">
-        <div id="ui">
-	  <div id="fps"/></div>
-          <div id="speed">Speed: 0 km/h</div>
-          <div id="distance">Distance: 0 m</div>
-          <div id="instructions">
-            Use Arrow Keys or WASD to drive<br>
-            ↑/W: Accelerate | ↓/S: Brake | ←→/A/D: Steer
-          </div>
-	  <!-- Replace the #ui div content -->
-	  <div id="ui">
-	    <div id="speed">Speed: 0 km/h</div>
-	    <div id="distance">Distance: 0 m</div>
+	<div id="fps"></div>
+	  <div id="ui2">
+	    <!-- <div id="speed">Speed: 0 km/h</div> -->
+	    <!-- <div id="distance">Distance: 0 m</div> -->
 	    <div id="rewind-bar">
               <div>Rewind Power: <span id="rewind-power">0</span>%</div>
               <div id="rewind-bar-container">
 		<div id="rewind-bar-fill"></div>
-              </div>
 	    </div>
 	    <div id="instructions">
               🔥 HOT WHEELS MODE 🔥<br>
@@ -44,7 +54,7 @@
       </div>
     </div>
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="game.js"></script>
+    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script> -->
+    <script src="./src/index.js" type="module"></script>
 </body>
 </html>

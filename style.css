@@ -1,13 +1,74 @@
+*{
+    box-sizing: border-box;
+}
 body{
     padding: 0px;
     margin: 0px;
     color:white;
 }
 #game-container{
-    position: relative;
+    /* position: relative; */
 }
 .menu{
     position: absolute;
+}
+
+.speedometer{
+    /* background: url("c5d39f15-f278-48ad-8290-e3cfa0c08500 (1).jpg") center; */
+    background-color: black;
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    margin: 0 auto;
+    border: 2px solid gray;
+    border-radius: 10px;
+    font-family: Courier;
+    /* filter:brightness(50%); */
+}
+#ui{
+    padding:10px;
+    display: flex;
+    border-radius: 10px;
+    width: 100%;
+    text-align: center;
+    /* flex-direction: column; */
+    /* backdrop-filter: blur(10px); */
+    backdrop-filter: contrast(1.5);
+    div {
+	flex:1;
+	text-shadow: 0 0 6px gray;
+    }
+    #parked{
+	/* color:#505050; */
+	color:red;
+    }
+    .abstract-design{
+	/* background-color: blue; */
+	display:flex;
+	#abstract{
+	    /* transform: rotate(20deg); */
+	    /* display:inline-block; */
+	    /* height: 20px; */
+	    flex:0.4;
+	    background-color: #0000ff7d;
+	    transform: skew(20deg);
+	    margin: -5px 1px -5px 1px;
+	}
+	&.right>#abstract{
+	    transform: skew(-20deg);
+	}
+    }
+    
+    #battery span{
+	/* flex:1 */
+	font-weight:700;
+	letter-spacing: -5px;
+	/* font-size: .8em; */
+	border:1.5px solid ;
+	border-radius: 2px;
+	display: inline-block;
+	text-align: left;
+    }
 }
 
 /* Add these new styles */

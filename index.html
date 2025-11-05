@@ -9,6 +9,16 @@
   </head>
   <body>
     <div id="game-container">
+    
+      <!-- Start Overlay -->
+      <!-- <div id="overlay"> -->
+      <!-- 	<div class="overlay-title">🏔️ Mountain Road Drive</div> -->
+      <!-- 	<button id="startButton">Start Driving</button> -->
+      <!-- 	<div class="overlay-subtitle"> -->
+      <!--     Use Arrow Keys or WASD to control<br> -->
+      <!-- 	</div> -->
+      <!-- </div> -->
+
       <div class="speedometer">
 	
       <div id="ui">
@@ -17,43 +27,62 @@
 	  <div id="abstract"></div>
 	  <div id="abstract"></div>
 	  <div id="abstract"></div>
+	  <div id="abstract"></div>
 	</div>
-        <div id="speed">km/h</div>
+        <div id="speed"><span>0</span><span>km/h</span></div>
         <div id="distance">0 m</div>
 	<div class="abstract-design right">
 	  <div id="abstract"></div>
 	  <div id="abstract"></div>
 	  <div id="abstract"></div>
+	  <div id="abstract"></div>
 	</div>
-	<div id="battery">BAT: <span>|||||||||</span></div>
+	<div id="battery">
+	  <img src="/static/gas-pump.svg">
+	  <span>|||||||||</span>
+	</div>
+	<!-- https://game-icons.net/1x1/delapouite/gas-pump.html#download -->
       </div>
+      </div>
+      <!-- Pollution Display -->
+      <div class="ui-panel" id="pollutionPanel">
+	<div class="ui-header">🏭 Pollution Tracker</div>
+	<div class="ui-row">
+          <span class="ui-label">CO₂ Emissions:</span>
+          <span class="ui-value" id="co2Value">0g</span>
+	</div>
+	<div class="ui-row">
+          <span class="ui-label">Current Rate:</span>
+          <span class="ui-value" id="co2Rate">120g/km</span>
+	</div>
+	<div class="ui-row">
+          <span class="ui-label">Trees needed:</span>
+          <span class="ui-value" id="treeValue">0.000</span>
+	</div>
+	<div class="ui-row">
+          <span class="ui-label">Fuel Used:</span>
+          <span class="ui-value" id="fuelValue">0.00L</span>
+	</div>
       </div>
       <div class="menu">
 	<div id="fps"></div>
 	  <div id="ui2">
 	    <!-- <div id="speed">Speed: 0 km/h</div> -->
 	    <!-- <div id="distance">Distance: 0 m</div> -->
-	    <div id="rewind-bar">
-              <div>Rewind Power: <span id="rewind-power">0</span>%</div>
-              <div id="rewind-bar-container">
-		<div id="rewind-bar-fill"></div>
-	    </div>
-	    <div id="instructions">
-              🔥 HOT WHEELS MODE 🔥<br>
-              Hold SPACE/W/↑ to REWIND and charge power<br>
-              Release to LAUNCH forward!<br>
-              A/D or ←→ to Steer
+	    <!-- <div id="rewind-bar"> -->
+            <!--   <div>Rewind Power: <span id="rewind-power">0</span>%</div> -->
+            <!--   <div id="rewind-bar-container"> -->
+	    <!-- 	<div id="rewind-bar-fill"></div> -->
 	    </div>
 	  </div>
         </div>
       </div>
       <div id="game-over" class="hidden">
         <h1>Game Over!</h1>
-        <p>Distance traveled: <span id="final-distance">0</span> m</p>
+        <p>Distance traveled: <span id="final-distance">0</span> km</p>
         <button id="restart">Restart</button>
       </div>
     </div>
-    
     <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script> -->
     <script src="./src/index.js" type="module"></script>
 </body>

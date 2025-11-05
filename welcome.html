@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Boot Screen</title>
+    <style>
+      * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+      }
+
+      body {
+          background: linear-gradient(45deg, #0a0a0a, #1a1a2e, #16213e);
+          color: #00ffff;
+          font-family: 'Courier New', monospace;
+          height: 100vh;
+          overflow: hidden;
+          position: relative;
+      }
+      .binary-rain {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          z-index: 2;
+          pointer-events: none;
+      }
+
+      .binary-column {
+          position: absolute;
+          top: -100px;
+          font-size: 12px;
+          color: #00ff41;
+          text-shadow: 0 0 5px #00ff41;
+          animation: matrixFall 6s linear infinite;
+          opacity: 0.6;
+          font-weight: bold;
+      }
+
+      @keyframes matrixFall {
+          0% { transform: translateY(-100px); opacity: 0; }
+          10% { opacity: 0.8; }
+          90% { opacity: 0.6; }
+          100% { transform: translateY(100vh); opacity: 0; }
+      }
+
+      .boot-container {
+          width: 100%;
+          height: 100vh;
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+      }
+
+      /* Grid Animation */
+      .grid-overlay {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          display: grid;
+          grid-template-columns: repeat(20, 1fr);
+          grid-template-rows: repeat(15, 1fr);
+          gap: 2px;
+          z-index: 10;
+          opacity: 1;
+          transition: opacity 2s ease-out;
+      }
+
+      .grid-overlay.fade-out {
+          opacity: 0;
+          pointer-events: none;
+      }
+
+      .grid-block {
+          background: rgba(0, 255, 255, 0.1);
+          border: 1px solid rgba(0, 255, 255, 0.3);
+          animation: blockAppear 0.1s ease-out forwards;
+          opacity: 0;
+          transform: scale(0);
+      }
+
+      @keyframes blockAppear {
+          to {
+              opacity: 1;
+              transform: scale(1);
+          }
+      }
+
+      @keyframes blockDisappear {
+          0% {
+              opacity: 1;
+              transform: scale(1);
+          }
+          50% {
+              background: rgba(0, 255, 255, 0.5);
+              transform: scale(1.1);
+          }
+          100% {
+              opacity: 0;
+              transform: scale(0);
+              background: rgba(0, 255, 255, 0);
+          }
+      }
+
+      /* Background Elements */
+      .background-elements {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          z-index: 1;
+          pointer-events: none;
+      }
+
+      .circuit-lines {
+          position: absolute;
+          width: 100%;
+          height: 100%;
+          opacity: 0.1;
+      }
+
+      .circuit-line {
+          position: absolute;
+          background: linear-gradient(90deg, transparent, #00ffff, transparent);
+          height: 1px;
+          animation: circuitFlow 4s linear infinite;
+      }
+
+      .circuit-line.vertical {
+          width: 1px;
+          height: 100%;
+          background: linear-gradient(0deg, transparent, #ff00ff, transparent);
+          animation: circuitFlowVertical 3s linear infinite;
+      }
+
+      @keyframes circuitFlow {
+          0% { transform: translateX(-100%); opacity: 0; }
+          50% { opacity: 1; }
+          100% { transform: translateX(100vw); opacity: 0; }
+      }
+
+      @keyframes circuitFlowVertical {
+          0% { transform: translateY(-100%); opacity: 0; }
+          50% { opacity: 1; }
+          100% { transform: translateY(100vh); opacity: 0; }
+      }
+
+      .floating-icons {
+          position: absolute;
+          width: 100%;
+          height: 100%;
+      }
+
+      .floating-icon {
+          position: absolute;
+          font-size: 1.5rem;
+          color: rgba(0, 255, 255, 0.3);
+          animation: floatIcon 8s linear infinite;
+      }
+
+      @keyframes floatIcon {
+          0% {
+              transform: translateY(100vh) translateX(0) rotate(0deg);
+              opacity: 0;
+          }
+          10% { opacity: 1; }
+          90% { opacity: 1; }
+          100% {
+              transform: translateY(-50px) translateX(50px) rotate(360deg);
+              opacity: 0;
+          }
+      }
+
+      /* System Info Container */
+      .system-info {
+          opacity: 0;
+          transform: translateY(50px);
+          transition: all 1s ease-out;
+          text-align: center;
+          z-index: 20;
+          position: relative;
+          max-height: calc(100vh - 140px); /* Leave space for bottom text */
+          overflow: visible;
+      }
+
+      .system-info.show {
+          opacity: 1;
+          transform: translateY(0);
+      }
+
+      .system-title {
+          font-size: 3rem;
+          margin-bottom: 1rem;
+          text-shadow: 0 0 20px #00ffff;
+          animation: titleGlow 2s ease-in-out infinite alternate;
+          position: relative;
+      }
+
+      .system-title::after {
+          content: '';
+          position: absolute;
+          bottom: -10px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 200px;
+          height: 2px;
+          background: linear-gradient(90deg, transparent, #00ffff, transparent);
+          animation: underlineGlow 2s ease-in-out infinite;
+      }
+
+      @keyframes titleGlow {
+          from { text-shadow: 0 0 20px #00ffff; }
+          to { text-shadow: 0 0 30px #00ffff, 0 0 40px #00ffff; }
+      }
+
+      @keyframes underlineGlow {
+          0%, 100% { opacity: 0.5; width: 200px; }
+          50% { opacity: 1; width: 300px; }
+      }
+
+      .system-subtitle {
+          font-size: 1rem;
+          color: rgba(0, 255, 255, 0.7);
+          margin-bottom: 1.5rem;
+          letter-spacing: 2px;
+      }
+
+      .stats-grid {
+          display: flex;
+	  align-items:center;
+          grid-template-columns: repeat(2, 1fr);
+          /* gap: 1.5rem; */
+          max-width: 900px;
+          margin: 0 auto;
+      }
+
+      .stat-card {
+	  flex:1;
+          background: rgba(0, 255, 255, 0.05);
+          border: 2px solid rgba(0, 255, 255, 0.3);
+          border-radius: 20px;
+          padding: 1.5rem;
+          backdrop-filter: blur(15px);
+          position: relative;
+          overflow: hidden;
+          transition: transform 0.3s ease;
+	  clip-path: polygon(15px 0, calc(100% - 15px) 0, 100% 15px, 100% calc(100% - 15px), calc(100% - 15px) 100%, 15px 100%, 0 calc(100% - 15px), 0 15px)
+      }
+
+      .stat-card:hover {
+          transform: translateY(-5px);
+      }
+
+      /* Enhanced rotating border animation with blur */
+      .stat-card::before {
+          content: '';
+          position: absolute;
+          top: -4px;
+          left: -4px;
+          right: -4px;
+          bottom: -4px;
+          background: conic-gradient(
+              from 0deg,
+              #00ffff 0deg,
+              #ff00ff 72deg,
+              #ffff00 144deg,
+              #00ff00 216deg,
+              #ff0080 288deg,
+              #00ffff 360deg
+          );
+          border-radius: 24px;
+          z-index: -2;
+          animation: rotateBorder 4s linear infinite;
+          filter: blur(14px); /* Increased blur for softer effect */
+          opacity: 0.8; /* Reduced opacity for subtlety */
+	  /* clip-path: polygon(15px 0, calc(100% - 15px) 0, 100% 15px, 100% calc(100% - 15px), calc(100% - 15px) 100%, 15px 100%, 0 calc(100% - 15px), 0 15px) */
+      }
+
+      .stat-card:nth-child(2){
+	  color: white;
+	  background: #4CAF50;
+	  cursor: pointer;
+	  font-size: 24px;
+	  margin: 20px;
+      }
+
+      @keyframes rotateBorder {
+          0% { transform: rotate(0deg) scale(1); }
+          50% { transform: rotate(180deg) scale(1.02); }
+          100% { transform: rotate(360deg) scale(1); }
+      }
+
+      .stat-card::after {
+          content: '';
+          position: absolute;
+          top: 2px;
+          left: 2px;
+          right: 2px;
+          bottom: 2px;
+          background: rgba(10, 10, 30, 0.95);
+          border-radius: 18px;
+          z-index: -1;
+	  clip-path: polygon(15px 0, calc(100% - 15px) 0, 100% 15px, 100% calc(100% - 15px), calc(100% - 15px) 100%, 15px 100%, 0 calc(100% - 15px), 0 15px)
+      }
+
+      .stat-header {
+          display: flex;
+          align-items: center;
+          margin-bottom: 1rem;
+      }
+
+      .stat-icon {
+          font-size: 1.5rem;
+          margin-right: 0.5rem;
+          color: #00ffff;
+      }
+
+      .stat-label {
+          font-size: 1.1rem;
+          color: #00ffff;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+      }
+
+      .stat-value {
+          font-size: 2.2rem;
+          font-weight: bold;
+          color: #ffffff;
+          margin-bottom: 1rem;
+          text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+      }
+
+      /* Grid-based progress bar */
+      .stat-bar-container {
+          width: 100%;
+          margin-bottom: 0.5rem;
+      }
+
+      .stat-bar {
+          display: grid;
+          grid-template-columns: repeat(20, 1fr);
+          gap: 2px;
+          height: 12px;
+          margin-bottom: 0.5rem;
+      }
+
+      .stat-bar-segment {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 2px;
+          position: relative;
+          overflow: hidden;
+          transition: all 0.3s ease;
+      }
+
+      .stat-bar-segment.active {
+          background: linear-gradient(45deg, #00ffff, #ff00ff);
+          box-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+          animation: segmentPulse 2s ease-in-out infinite alternate;
+      }
+
+      .stat-bar-segment.active::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+          animation: segmentShimmer 1.5s infinite;
+      }
+
+      @keyframes segmentPulse {
+          0% { transform: scaleY(1); }
+          100% { transform: scaleY(1.2); }
+      }
+
+      @keyframes segmentShimmer {
+          0% { left: -100%; }
+          100% { left: 100%; }
+      }
+
+      .stat-details {
+          display: flex;
+          justify-content: space-between;
+          font-size: 0.9rem;
+          color: rgba(255, 255, 255, 0.7);
+      }
+
+      .boot-text {
+          position: fixed; /* Changed from absolute to fixed */
+          bottom: 2rem;
+          left: 50%;
+          transform: translateX(-50%);
+          font-size: 1.1rem;
+          opacity: 0;
+          letter-spacing: 2px;
+          z-index: 100; /* Higher z-index to ensure visibility */
+          color: #00ff41;
+          text-shadow: 0 0 10px #00ffff;
+          /* font-weight: bold; */
+          transition: opacity 1s ease-in-out;
+      }
+
+      .boot-text.show {
+          opacity: 0.8;
+          animation: bootTextPulse 2s ease-in-out infinite alternate;
+      }
+
+      @keyframes bootTextPulse {
+          0% {
+              opacity: 0.6;
+              text-shadow: 0 0 10px #00ffff;
+          }
+          100% {
+              opacity: 1;
+              text-shadow: 0 0 20px #00ffff, 0 0 30px #00ffff;
+          }
+      }
+
+      /* Particle Effects */
+      .particles {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          pointer-events: none;
+          z-index: 1;
+      }
+
+      .particle {
+          position: absolute;
+          width: 3px;
+          height: 3px;
+          background: #00ffff;
+          border-radius: 50%;
+          box-shadow: 0 0 6px #00ffff;
+          animation: particleFloat 6s linear infinite;
+      }
+
+      @keyframes particleFloat {
+          0% {
+              transform: translateY(100vh) translateX(0) scale(0);
+              opacity: 0;
+          }
+          10% {
+              opacity: 1;
+              transform: translateY(90vh) translateX(10px) scale(1);
+          }
+          90% {
+              opacity: 1;
+          }
+          100% {
+              transform: translateY(-10px) translateX(100px) scale(0);
+              opacity: 0;
+          }
+      }
+
+      .corner-decoration {
+          position: absolute;
+          width: 80px;
+          height: 80px;
+          z-index: 2;
+          background: transparent;
+      }
+
+      .corner-decoration::before {
+          content: '';
+          position: absolute;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(45deg, #00ffff, #ff00ff);
+          opacity: 0.6;
+          filter: blur(2px);
+          clip-path: polygon(0 0, 70% 0, 100% 30%, 100% 100%, 30% 100%, 0 70%);
+          animation: cornerElectric 2s ease-in-out infinite alternate;
+      }
+
+      .corner-decoration::after {
+          content: '';
+          position: absolute;
+          top: 2px;
+          left: 2px;
+          right: 2px;
+          bottom: 2px;
+          background: rgba(10, 10, 30, 0.8);
+          clip-path: polygon(0 0, 70% 0, 100% 30%, 100% 100%, 30% 100%, 0 70%);
+      }
+
+      .corner-decoration.top-left {
+          top: 20px;
+          left: 20px;
+          transform: rotate(0deg);
+      }
+
+      .corner-decoration.top-right {
+          top: 20px;
+          right: 20px;
+          transform: rotate(90deg);
+      }
+
+      .corner-decoration.bottom-left {
+          bottom: 20px;
+          left: 20px;
+          transform: rotate(-90deg);
+      }
+
+      .corner-decoration.bottom-right {
+          bottom: 20px;
+          right: 20px;
+          transform: rotate(180deg);
+      }
+
+      @keyframes cornerElectric {
+          0% {
+              opacity: 0.4;
+              filter: blur(2px);
+          }
+          100% {
+              opacity: 0.8;
+              filter: blur(1px);
+              box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+          }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="boot-container">
+      <!-- Background Elements -->
+      <div class="background-elements">
+        <div class="circuit-lines" id="circuitLines"></div>
+        <div class="floating-icons" id="floatingIcons"></div>
+      </div>
+      <div class="binary-rain" id="binaryRain"></div>
+
+      <!-- Corner Decorations -->
+      <div class="corner-decoration top-left"></div>
+      <div class="corner-decoration top-right"></div>
+      <div class="corner-decoration bottom-left"></div>
+      <div class="corner-decoration bottom-right"></div>
+
+      <!-- Particle Effects -->
+      <div class="particles" id="particles"></div>
+
+      <!-- Grid Overlay -->
+      <div class="grid-overlay" id="gridOverlay"></div>
+
+      <!-- System Information -->
+      <div class="system-info" id="systemInfo">
+        <h1 class="system-title">🏔️ Mountain Road Drive</h1>
+        <div class="system-subtitle">An Infinite Car Running Simulator</div>
+        <div2 class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-header">
+              <div class="stat-icon">⚡</div>
+              <div class="stat-label">CPU Core</div>
+            </div>
+            <div class="stat-value" id="cpuValue">0%</div>
+            <div class="stat-bar-container">
+              <div class="stat-bar" id="cpuBar"></div>
+              <div class="stat-details">
+                <span>Intel i9-13900K</span>
+                <span id="cpuTemp">45°C</span>
+              </div>
+            </div>
+          </div>
+          <button id="startGame" class="stat-card">
+	    Play
+	  </button>
+          <div class="stat-card">
+            <div class="stat-header">
+              <div class="stat-icon">🧠</div>
+              <div class="stat-label">Memory</div>
+            </div>
+            <div class="stat-value" id="memoryValue">0%</div>
+            <div class="stat-bar-container">
+              <div class="stat-bar" id="memoryBar"></div>
+              <div class="stat-details">
+                <span>32GB DDR5</span>
+                <span id="memoryUsed">0GB / 32GB</span>
+              </div>
+            </div>
+          </div>
+        </div2>
+      </div>
+
+      <div class="boot-text" id="bootText">◢ SYSTEM INITIALIZATION COMPLETE ◣</div>
+    </div>
+
+    <script>
+      class BootScreen {
+          constructor() {
+              this.gridOverlay = document.getElementById('gridOverlay');
+              this.systemInfo = document.getElementById('systemInfo');
+              this.bootText = document.getElementById('bootText');
+              this.init();
+          }
+
+          init() {
+              this.createGridBlocks();
+              this.createParticles();
+              this.createBackgroundElements();
+              this.createProgressBars();
+              this.startBootSequence();
+          }
+
+          createGridBlocks() {
+              const totalBlocks = 20 * 15;
+              for (let i = 0; i < totalBlocks; i++) {
+                  const block = document.createElement('div');
+                  block.className = 'grid-block';
+                  block.style.animationDelay = `${Math.random() * 2}s`;
+                  this.gridOverlay.appendChild(block);
+              }
+          }
+	  createBinaryRain() {
+              const rainContainer = document.getElementById('binaryRain');
+              for (let i = 0; i < 50; i++) {
+                  const column = document.createElement('div');
+                  column.className = 'binary-column';
+                  column.style.left = Math.random() * 100 + '%';
+                  column.style.animationDelay = Math.random() * 6 + 's';
+                  column.style.animationDuration = (4 + Math.random() * 4) + 's';
+                  
+                  let binaryText = '';
+                  for (let j = 0; j < 20; j++) {
+                      binaryText += Math.random() > 0.5 ? '1' : '0';
+                      if (j % 4 === 3) binaryText += '<br>';
+                  }
+                  column.innerHTML = binaryText;
+                  rainContainer.appendChild(column);
+              }
+          }
+
+          createParticles() {
+              const particlesContainer = document.getElementById('particles');
+              for (let i = 0; i < 30; i++) {
+                  const particle = document.createElement('div');
+                  particle.className = 'particle';
+                  particle.style.left = Math.random() * 100 + '%';
+                  particle.style.animationDelay = Math.random() * 6 + 's';
+                  particle.style.animationDuration = (4 + Math.random() * 3) + 's';
+                  particlesContainer.appendChild(particle);
+              }
+          }
+
+          createBackgroundElements() {
+              // Circuit lines
+              const circuitContainer = document.getElementById('circuitLines');
+              for (let i = 0; i < 8; i++) {
+                  const line = document.createElement('div');
+                  line.className = i % 2 === 0 ? 'circuit-line' : 'circuit-line vertical';
+                  line.style.top = Math.random() * 100 + '%';
+                  line.style.left = Math.random() * 100 + '%';
+                  line.style.animationDelay = Math.random() * 4 + 's';
+                  circuitContainer.appendChild(line);
+              }
+
+              // Floating icons
+              const iconContainer = document.getElementById('floatingIcons');
+              const icons = ['◆', '◇', '●', '○', '▲', '△', '■', '□', '★', '☆'];
+              for (let i = 0; i < 15; i++) {
+                  const icon = document.createElement('div');
+                  icon.className = 'floating-icon';
+                  icon.textContent = icons[Math.floor(Math.random() * icons.length)];
+                  icon.style.left = Math.random() * 100 + '%';
+                  icon.style.animationDelay = Math.random() * 8 + 's';
+                  icon.style.animationDuration = (6 + Math.random() * 4) + 's';
+                  iconContainer.appendChild(icon);
+              }
+          }
+
+          createProgressBars() {
+              const barIds = ['cpuBar', 'memoryBar'];
+              barIds.forEach(barId => {
+                  const bar = document.getElementById(barId);
+                  for (let i = 0; i < 20; i++) {
+                      const segment = document.createElement('div');
+                      segment.className = 'stat-bar-segment';
+                      bar.appendChild(segment);
+                  }
+              });
+          }
+
+          startBootSequence() {
+              setTimeout(() => {
+                  this.animateGridDisappear();
+              }, 3000);
+
+              setTimeout(() => {
+                  this.gridOverlay.classList.add('fade-out');
+                  this.showSystemInfo();
+		  this.createBinaryRain();
+              }, 5000);
+
+              setTimeout(() => {
+                  this.animateSystemStats();
+              }, 6000);
+
+              // Show boot text after system stats are loaded
+              setTimeout(() => {
+                  this.showBootText();
+              }, 8000);
+          }
+
+          animateGridDisappear() {
+              const blocks = document.querySelectorAll('.grid-block');
+              blocks.forEach((block, index) => {
+                  setTimeout(() => {
+                      block.style.animation = 'blockDisappear 0.5s ease-out forwards';
+                  }, Math.random() * 1000);
+              });
+          }
+
+          showSystemInfo() {
+              this.systemInfo.classList.add('show');
+          }
+
+          showBootText() {
+              this.bootText.classList.add('show');
+          }
+
+          animateSystemStats() {
+              const stats = [
+                  { id: 'cpu', value: 45, max: 100, unit: '%', temp: '52°C' },
+                  { id: 'memory', value: 72, max: 100, unit: '%', detail: '23GB / 32GB' }];
+
+              stats.forEach((stat, index) => {
+                  setTimeout(() => {
+                      this.animateStat(stat);
+                  }, index * 500);
+              });
+
+              setInterval(() => {
+                  this.updateStats();
+              }, 4000);
+          }
+
+          animateStat(stat) {
+              const valueElement = document.getElementById(stat.id + 'Value');
+              const barElement = document.getElementById(stat.id + 'Bar');
+              const segments = barElement.querySelectorAll('.stat-bar-segment');
+              
+              let currentValue = 0;
+              const targetValue = stat.value;
+              const increment = targetValue / 60;
+              const totalSegments = segments.length;
+
+              const animate = () => {
+                  if (currentValue < targetValue) {
+                      currentValue += increment;
+                      const displayValue = Math.min(Math.round(currentValue), targetValue);
+                      valueElement.textContent = displayValue + stat.unit;
+                      
+                      // Animate segments
+                      const activeSegments = Math.floor((displayValue / stat.max) * totalSegments);
+                      segments.forEach((segment, index) => {
+                          setTimeout(() => {
+                              if (index < activeSegments) {
+                                  segment.classList.add('active');
+                              }
+                          }, index * 50);
+                      });
+                      
+                      requestAnimationFrame(animate);
+                  } else {
+                      // Update additional details
+                      if (stat.id === 'cpu' && document.getElementById('cpuTemp')) {
+                          document.getElementById('cpuTemp').textContent = stat.temp;
+                      }
+                      if (stat.detail) {
+                          const detailElement = document.getElementById(stat.id === 'memory' ? 'memoryUsed' :
+                                                                        stat.id === 'disk' ? 'diskUsed' : 'networkStatus');
+                          if (detailElement) detailElement.textContent = stat.detail;
+                      }
+                  }
+              };
+              animate();
+          }
+
+          updateStats() {
+              const stats = [
+                  { id: 'cpu', min: 20, max: 80, unit: '%', tempMin: 45, tempMax: 70 },
+                  { id: 'memory', min: 60, max: 85, unit: '%' },
+                  { id: 'disk', min: 35, max: 45, unit: '%' },
+                  { id: 'network', min: 5, max: 50, unit: ' MB/s' }
+              ];
+
+              stats.forEach(stat => {
+                  const newValue = Math.floor(Math.random() * (stat.max - stat.min + 1)) + stat.min;
+                  const valueElement = document.getElementById(stat.id + 'Value');
+                  // const barElement = document.getElementById(stat.id + 'Bar');
+                  const segments = barElement.querySelectorAll('.stat-bar-segment');
+                  
+                  valueElement.textContent = newValue + stat.unit;
+                  
+                  // Update segments
+                  const activeSegments = Math.floor((newValue / 100) * segments.length);
+                  segments.forEach((segment, index) => {
+                      if (index < activeSegments) {
+                          segment.classList.add('active');
+                      } else {
+                          segment.classList.remove('active');
+                      }
+                  });
+
+                  // Update temperature for CPU
+                  if (stat.id === 'cpu' && stat.tempMin) {
+                      const temp = Math.floor(Math.random() * (stat.tempMax - stat.tempMin + 1)) + stat.tempMin;
+                      document.getElementById('cpuTemp').textContent = temp + '°C';
+                  }
+              });
+          }
+      }
+
+      new BootScreen();
+      document.getElementById("startGame").addEventListener("click",()=>window.location.replace("/"))
+      <!-- window.addEventListener('load', () => { -->
+      <!-- }); -->
+      </script>
+  </body>
+</html>

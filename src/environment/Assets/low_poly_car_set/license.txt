@@ -1,0 +1,11 @@
+Model Information:
+* title:	Low Poly Car Set
+* source:	https://sketchfab.com/3d-models/low-poly-car-set-9b8a51478e404a3594e11584b90a0e91
+* author:	BetelgeuseMan (https://sketchfab.com/betelgeuseman)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Low Poly Car Set" (https://sketchfab.com/3d-models/low-poly-car-set-9b8a51478e404a3594e11584b90a0e91) by BetelgeuseMan (https://sketchfab.com/betelgeuseman) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

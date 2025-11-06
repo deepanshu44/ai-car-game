@@ -6,7 +6,7 @@ export class Cloud {
         this.group = new THREE.Group();
         
         this.createCloud();
-        this.group.position.set(x, y, z);
+        this.group.position.set(x, y*2, z);
         
         const scale = 2 + Math.random() * 2;
         this.group.scale.set(scale, scale, scale);

@@ -1,0 +1,11 @@
+Model Information:
+* title:	Cartoon Low Poly Futuristic Car
+* source:	https://sketchfab.com/3d-models/cartoon-low-poly-futuristic-car-994c56e9ecd74fbd9f760640cc7342e5
+* author:	antonmoek (https://sketchfab.com/antonmoek)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Cartoon Low Poly Futuristic Car" (https://sketchfab.com/3d-models/cartoon-low-poly-futuristic-car-994c56e9ecd74fbd9f760640cc7342e5) by antonmoek (https://sketchfab.com/antonmoek) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

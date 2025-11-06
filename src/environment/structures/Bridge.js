@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 export class Bridge {
     constructor(scene, z) {
@@ -12,10 +13,24 @@ export class Bridge {
     }
     
     createBridge() {
+	this.sharedMaterials = {
+            deck: new THREE.MeshLambertMaterial({ color: 0x444444 }),
+            railing: new THREE.MeshLambertMaterial({ color: 0x666666 }),
+            pillar: new THREE.MeshLambertMaterial({ color: 0x555555 }),
+            lampPost: new THREE.MeshLambertMaterial({ color: 0x333333 }),
+            lampHead: new THREE.MeshLambertMaterial({ color: 0x222222 }),
+	    buld:new THREE.MeshBasicMaterial({ 
+		color: 0xffffbb,
+		emissive: 0xffffbb,
+		emissiveIntensity: 1
+            }),
+            board: new THREE.MeshLambertMaterial({ color: 0x2a5f2a }),
+            border: new THREE.MeshLambertMaterial({ color: 0xffffff })
+	};
         // Bridge deck
         const deckGeometry = new THREE.BoxGeometry(80, 0.5, 12);
-        const deckMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
-        const deck = new THREE.Mesh(deckGeometry, deckMaterial);
+        // const deckMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
+        const deck = new THREE.Mesh(deckGeometry, this.sharedMaterials.deck);
         deck.position.y = 8;
         deck.castShadow = false;
         this.group.add(deck);
@@ -39,70 +54,98 @@ export class Bridge {
         this.createBridgeCars();
         
         // Shadow/underpass effect
-        this.createShadow();
+        // this.createShadow();
     }
     
     createRailings() {
         const railingGeometry = new THREE.BoxGeometry(80, 1, 0.3);
-        const railingMaterial = new THREE.MeshLambertMaterial({ color: 0x666666 });
+        // const railingMaterial = new THREE.MeshLambertMaterial({ color: 0x666666 });
         
-        const railingLeft = new THREE.Mesh(railingGeometry, railingMaterial);
+        const railingLeft = new THREE.Mesh(railingGeometry, this.sharedMaterials.railing);
         railingLeft.position.set(0, 8.75, -6);
         this.group.add(railingLeft);
         
-        const railingRight = new THREE.Mesh(railingGeometry, railingMaterial);
+        const railingRight = new THREE.Mesh(railingGeometry, this.sharedMaterials.railing);
         railingRight.position.set(0, 8.75, 6);
         this.group.add(railingRight);
     }
     
     createPillars() {
         const pillarGeometry = new THREE.BoxGeometry(2, 8, 2);
-        const pillarMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
+        // const pillarMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
         const pillarPositions = [-30, -15, 15, 30];
-        
-        pillarPositions.forEach(x => {
-            const pillarL = new THREE.Mesh(pillarGeometry, pillarMaterial);
-            pillarL.position.set(x, 4, -8);
-            pillarL.castShadow = false;
-            this.group.add(pillarL);
+	
+	const geometries = [];
+	pillarPositions.forEach(x => {
+            const geoL = pillarGeometry.clone();
+            geoL.translate(x, 4, -8);
+            geometries.push(geoL);
             
-            const pillarR = new THREE.Mesh(pillarGeometry, pillarMaterial);
-            pillarR.position.set(x, 4, 8);
-            pillarR.castShadow = false;
-            this.group.add(pillarR);
-        });
+            const geoR = pillarGeometry.clone();
+            geoR.translate(x, 4, 8);
+            geometries.push(geoR);
+	});
+	
+	const mergedGeometry = mergeGeometries(geometries);
+	const pillars = new THREE.Mesh(mergedGeometry, this.sharedMaterials.pillar);
+	this.group.add(pillars);
+        // pillarPositions.forEach(x => {
+        //     const pillarL = new THREE.Mesh(pillarGeometry, this.sharedMaterials.pillar);
+        //     pillarL.position.set(x, 4, -8);
+        //     pillarL.castShadow = false;
+        //     this.group.add(pillarL);
+            
+        //     const pillarR = new THREE.Mesh(pillarGeometry, this.sharedMaterials.pillar);
+        //     pillarR.position.set(x, 4, 8);
+        //     pillarR.castShadow = false;
+        //     this.group.add(pillarR);
+        // });
     }
     
     createBridgeLamps() {
-        const lampPositions = [-35, -20, -5, 10, 25];
-        lampPositions.forEach(x => {
-            this.createSingleBridgeLamp(x, 8, -5.5);
-            this.createSingleBridgeLamp(x, 8, 5.5);
-        });
+	const lampPositions = [-35, -20, -5, 10, 25];
+	const count = lampPositions.length * 2;
+	
+	// Post
+	const postGeometry = new THREE.CylinderGeometry(0.1, 0.1, 2, 6);
+	const postMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+	const postMesh = new THREE.InstancedMesh(postGeometry, postMaterial, count);
+	
+	const matrix = new THREE.Matrix4();
+	let idx = 0;
+	lampPositions.forEach(x => {
+            matrix.setPosition(x, 9, -5.5);
+            postMesh.setMatrixAt(idx++, matrix);
+            
+            matrix.setPosition(x, 9, 5.5);
+            postMesh.setMatrixAt(idx++, matrix);
+	});
+	
+	this.group.add(postMesh);
     }
     
     createSingleBridgeLamp(x, y, z) {
         const lampGroup = new THREE.Group();
         
-        const postGeometry = new THREE.CylinderGeometry(0.1, 0.1, 2, 8);
-        const postMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
-        const post = new THREE.Mesh(postGeometry, postMaterial);
+        const postGeometry = new THREE.CylinderGeometry(0.1, 0.1, 2, 6);
+        // const postMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+        const post = new THREE.Mesh(postGeometry, this.sharedMaterials.lampPost);
         post.position.y = 1;
         lampGroup.add(post);
         
         const headGeometry = new THREE.BoxGeometry(0.3, 0.4, 0.3);
-        const headMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
-        const head = new THREE.Mesh(headGeometry, headMaterial);
+        // const headMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
+        const head = new THREE.Mesh(headGeometry, this.sharedMaterials.lampHead);
         head.position.y = 2.2;
         lampGroup.add(head);
         
         const bulbGeometry = new THREE.SphereGeometry(0.15, 8, 8);
-        const bulbMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0xffffbb,
-            emissive: 0xffffbb,
-            emissiveIntensity: 1
-        });
-        const bulb = new THREE.Mesh(bulbGeometry, bulbMaterial);
+        // const bulbMaterial = new THREE.MeshBasicMaterial({ 
+        //     color: 0xffffbb,
+        //     emissive: 0xffffbb,
+        //     emissiveIntensity: 1
+        // });
+        const bulb = new THREE.Mesh(bulbGeometry, this.sharedMaterials.bulb);
         bulb.position.y = 2;
         lampGroup.add(bulb);
         
@@ -204,7 +247,7 @@ export class Bridge {
         const lampPositions = [-2, -0.7, 0.7, 2];
         lampPositions.forEach(lampX => {
             const lampHousing = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.15, 0.15, 0.3, 8),
+                new THREE.CylinderGeometry(0.15, 0.15, 0.3, 6),
                 new THREE.MeshLambertMaterial({ color: 0x222222 })
             );
             lampHousing.rotation.z = Math.PI / 2;
@@ -254,8 +297,10 @@ export class Bridge {
     
     createOverheadSignTexture(topText, bottomText) {
         const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 256;
+        canvas.width = 256;
+        canvas.height = 128;
+        // canvas.width = 512;
+        // canvas.height = 256;
         const ctx = canvas.getContext('2d');
         
         ctx.fillStyle = '#001a00';
@@ -291,7 +336,7 @@ export class Bridge {
             color: 0x000000,
             transparent: true,
             opacity: 0.3,
-            side: THREE.DoubleSide
+            side: THREE.FrontSide
         });
         const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
         shadow.rotation.x = -Math.PI / 2;

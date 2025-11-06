@@ -19,6 +19,7 @@ export class BushManager {
         
         // Create instanced mesh for ~100 bushes
         this.bushes = new THREE.InstancedMesh(bushGeometry, bushMaterial, 100);
+	// this.bushes.count = 0;
         this.bushes.castShadow = true;
         this.scene.add(this.bushes);
         
@@ -30,7 +31,7 @@ export class BushManager {
     }
     
     addBush(x, z) {
-        if (this.count >= this.bushes.count) {
+        if (this.count >= 100) {
             console.warn('Bush pool exhausted');
             return;
         }
@@ -57,6 +58,7 @@ export class BushManager {
         });
         
         this.count++;
+	this.bushes.count = this.count
         this.bushes.instanceMatrix.needsUpdate = true;
     }
     

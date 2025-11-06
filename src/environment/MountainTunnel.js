@@ -37,12 +37,13 @@ export class MountainTunnel {
 	const outerGeometry = new THREE.CylinderGeometry(
             outerRadius, outerRadius, height, radialSegments, 1, true // Open-ended
 	);
-	const outerMaterial = new THREE.MeshPhongMaterial({
-            color: 0x00ff00,
-            side: THREE.DoubleSide, // Render both sides
-            shininess: 30
-	});
-	const outerCylinder = new THREE.Mesh(outerGeometry, outerMaterial);
+	// const outerMaterial = new THREE.MeshPhongMaterial({
+        //     color: 0x00ff00,
+        //     side: THREE.DoubleSide, // Render both sides
+        //     shininess: 30
+	// });
+	// const outerCylinder = new THREE.Mesh(outerGeometry, outerMaterial);
+	const outerCylinder = new THREE.Mesh(outerGeometry);
 	this.mesh.add(outerCylinder);
 
 	// Inner cylinder (visible from inside and outside)
@@ -50,8 +51,8 @@ export class MountainTunnel {
             innerRadius, innerRadius, height, radialSegments, 1, true // Open-ended
 	);
 	const innerMaterial = new THREE.MeshPhongMaterial({
-            color: 0xff0000,
-            side: THREE.DoubleSide, // Render both sides
+            color: 0x4a4a4a,
+            side: THREE.BackSide, // Render back side
             shininess: 30
 	});
 	const innerCylinder = new THREE.Mesh(innerGeometry, innerMaterial);
@@ -149,7 +150,6 @@ export class MountainTunnel {
     
     shouldSwitchBiome(playerZ) {
         const relativeZ = playerZ - this.mesh.position.z;
-	// console.log("relativeZ = ", relativeZ,playerZ,this.mesh.position.z,this.centerZ);
         return relativeZ >= this.centerZ - 5 && 
             relativeZ <= this.centerZ + 5 && 
             !this.biomeSwitched;

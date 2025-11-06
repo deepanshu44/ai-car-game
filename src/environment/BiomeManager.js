@@ -4,6 +4,7 @@ import { CityBiome } from './biomes/CityBiome.js';
 import { FarmlandBiome } from './biomes/FarmlandBiome.js';
 import { GameConfig } from '../config/GameConfig.js';
 import { MountainTunnel } from './MountainTunnel.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export class BiomeManager {
     constructor(scene) {
@@ -16,18 +17,21 @@ export class BiomeManager {
         this.transitionStartDistance = 0;
 	this.tunnelCreated = false
 	this.distanceToSwitch = {dist:NaN}
-        
-        this.cityBiome = new CityBiome(scene,this.distanceToSwitch);
-        this.farmlandBiome = new FarmlandBiome(scene,this.distanceToSwitch);
-	this.createTunnel()
-        // Start with city biome visible
+	this.fetchGltf = null
+
+	this.cityBiome = new CityBiome(scene,this.distanceToSwitch);
+        this.farmlandBiome = new FarmlandBiome(scene,this.distanceToSwitch,); 
+	// Start with city biome visible
         this.farmlandBiome.hide();
+	this.createTunnel()
+	this.loadHouseModel()
     }
     
-    update(distance, worldSpeed) {
+    update(distance,worldSpeed) {
         // Check if we should start a transition
         if (!this.isTransitioning && 
-            distance >= this.nextBiomeSwitch - GameConfig.biome.transitionZoneLength) {
+            // distance >= this.nextBiomeSwitch - GameConfig.biome.transitionZoneLength) {
+            distance >= this.nextBiomeSwitch) {
             this.isTransitioning = true;
             this.transitionStartDistance = distance;
             this.transitionProgress = 0;
@@ -35,7 +39,7 @@ export class BiomeManager {
                 ? BiomeTypes.FARMLAND 
                 : BiomeTypes.CITY;
             
-            this.showNotification(`APPROACHING ${this.targetBiome.toUpperCase()}`);
+            // this.showNotification(`APPROACHING ${this.targetBiome.toUpperCase()}`);
         }
         
         // Update transition progress
@@ -47,7 +51,7 @@ export class BiomeManager {
             );
             
             // this.applyTransition(this.transitionProgress);
-            if (this.transitionProgress >= 1) {
+            if (this.transitionProgress > 0) {
 		this.switchBiome()
                 this.isTransitioning = false;
                 this.currentBiome = this.targetBiome;
@@ -114,9 +118,17 @@ export class BiomeManager {
         this.scene.add(this.tunnel.mesh);
         this.tunnelCreated = true;
         
-        // console.log('Tunnel created at z:', this.nextBiomeSwitch);
+        }
+    loadHouseModel(){
+	const gltfLoader = new GLTFLoader();
+	gltfLoader.load( 'https://threejs.org/manual/examples/resources/models/cartoon_lowpoly_small_city_free_pack/scene.gltf',
+			 (gltf) => {
+			     this.farmlandBiome.spawnHouses(gltf)
+			     this.cityBiome.spawnHouses(gltf)
+			     
+			 })
+	
     }
-    
     // applyTunnelLighting(lighting) {
     //     // Find ambient light in scene
     //     this.scene.traverse(child => {
@@ -136,7 +148,6 @@ export class BiomeManager {
     // }
 
     switchBiome() {
-	console.log("this.currentBiome = ", this.currentBiome);
         if (this.currentBiome === 'city') {
             this.currentBiome = 'farmland';
             this.cityBiome.hide();

@@ -2,15 +2,15 @@ export const GameConfig = {
     physics: {
         // maxSpeed: 1.7,
         maxSpeed: 2,
-        acceleration: 0.02,
-        deceleration: 0.03,
+        acceleration: 0.003,
+        deceleration: 0.003,
         maxLateralSpeed: 0.1
     },
     
     rewind: {
         maxPower: 100,
         chargeRate: 10.5,
-        duration: 15000
+        duration: 17
     },
     
     camera: {

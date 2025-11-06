@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>loading-spinner</title>
+  </head>
+  <style>
+    * {
+	margin:0;
+	paddin:0;
+	box-sizing:border-box;
+    }
+    body{
+	height:100vh;
+	width:100vw;
+	display:flex;
+	justify-content:center;
+	align-items:center;
+	background:black;
+    }
+    #app{
+	width:80px;
+	height:80px;
+	border: 2px solid #2c2cffa8;
+	border-radius:40px;
+	// box-shadow:q
+    }
+    #rotate{
+	width:60px;
+	height:200px;
+	// border:2px solid green;
+	background:black;
+	position:absolute;
+	animation:myAnim linear 2s infinite;
+    }
+
+    #app2{
+	width:50px;
+	height:50px;
+	border: 2px solid green;
+	border-radius:25px;
+	position:absolute;
+	// box-shadow:
+    }
+    #rotate2{
+	width:30px;
+	height:60px;
+	// border:2px solid green;
+	background:black;
+	position:absolute;
+	animation:myAnim2 linear 1s infinite;
+    }
+	
+    
+    @keyframes myAnim{
+	from{
+	    transform:rotate(0)
+	}
+	to{
+	    transform:rotate(360deg)
+	}
+    }
+    @keyframes myAnim2{
+	from{
+	    transform:rotate(0)
+	}
+	to{
+	    transform:rotate(360deg)
+	}
+    }
+    @keyframes myAnim3{
+	from{
+	    text-shadow:0px 0px 5px white;
+	}
+	to {
+	    text-shadow:0px 0px 30px white;
+	}
+    }
+
+    #app3{
+	position:absolute;
+	font-size:2em;
+	text-shadow:0px 0px 24px gray;
+	color:gray;
+	animation:myAnim3 2s linear alternate infinite;
+    }
+    </style>
+    <body>
+    <div id="app">
+    </div>
+    <div id="rotate">
+    </div>
+    <div id="app2">
+    </div>
+    <div id="rotate2">
+    </div>
+    <div id="app3">
+     Loading
+    </div>
+    </body>
+    </html>

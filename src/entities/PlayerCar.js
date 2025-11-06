@@ -2,31 +2,50 @@ import * as THREE from 'three';
 import { MeshFactory } from '../utils/MeshFactory.js';
 import { Colors } from '../utils/Constants.js';
 import { GameConfig } from '../config/GameConfig.js';
+import { AudioController } from '../systems/AudioController.js';
+import { GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 
 export class PlayerCar {
-    constructor(scene) {
+    constructor(scene,camera) {
         this.scene = scene;
         this.group = new THREE.Group();
+	this.group.name = 'car';
         
         // Physics properties
         this.speed = 0;
         this.lateralSpeed = 0;
-        this.isMoving = false;
-        this.isRewinding = false;
+	this.carState = "stopped"
         
-        // Rewind properties
-        this.rewindPower = 0;
-        this.rewindTimer = 0;
-        
-        this.createCar();
-        this.createHeadlights();
+        // this.createCar();
+	if (this.scene.timeOfTheDay !== "day") {
+            this.createHeadlights();
+	} 
+	const loader = new GLTFLoader();
+	// "Cartoon Low Poly Futuristic Car" (https://skfb.ly/oEnSD)
+	// by antonmoek is licensed under Creative Commons Attribution
+	// (http://creativecommons.org/licenses/by/4.0/).
+	loader.load('src/entities/cartoon_low_poly_futuristic_car/scene.gltf', (gltf) => {
+	    const car = gltf.scene;
+	    car.scale.set(1.5, 1.5, 1.5);
+	    car.position.y = 1.5;
+	    // car.castShadow = true;
+	    car.traverse((child) => {
+		if (child.isMesh) {
+		    child.castShadow = true;
+		}
+	    });
+
+	    this.group.add(car);
+	}, undefined, (error) => {
+	    console.error('Error loading model:', error);
+	})
         
         this.group.position.set(
             GameConfig.road.playerLane * GameConfig.road.laneWidth,
             0,
             0
         );
-        
+        this.audioController = new AudioController(camera)
         scene.add(this.group);
     }
     
@@ -97,14 +116,20 @@ export class PlayerCar {
     
     createHeadlights() {
         // Spotlights
-        const headlight1 = new THREE.SpotLight(Colors.HEADLIGHT, 1.5, 30, Math.PI / 6, 0.5);
+        const headlight1 = new THREE.SpotLight(Colors.HEADLIGHT, 200, 30, Math.PI / 6, 0.5);
         headlight1.position.set(-0.7, 1, 2);
         headlight1.target.position.set(-0.7, 0, 10);
         this.group.add(headlight1);
         this.group.add(headlight1.target);
-        
+
+        const headlight2 = new THREE.SpotLight(Colors.HEADLIGHT, 200, 30, Math.PI / 6, 0.5);
+        headlight2.position.set(0.7, 1, 2);
+        headlight2.target.position.set(0.7, 0, 10);
+        this.group.add(headlight2);
+        this.group.add(headlight2.target);
+
         // Beam visualization
-        this.createHeadlightBeam();
+        // this.createHeadlightBeam();
     }
     
     createHeadlightBeam() {
@@ -170,63 +195,66 @@ export class PlayerCar {
     
     handleInput(input) {
         const config = GameConfig.physics;
-        
         if (input.forward) {
-            if (!this.isMoving || this.rewindPower < 90) {
-                this.isRewinding = true;
-                this.rewindPower = Math.min(
-                    this.rewindPower + GameConfig.rewind.chargeRate,
-                    GameConfig.rewind.maxPower
-                );
-            }
-        } else {
-            if (this.isRewinding && this.rewindPower > 0) {
-                this.isMoving = true;
-                this.rewindTimer = GameConfig.rewind.duration;
-                this.speed = config.maxSpeed * (this.rewindPower / GameConfig.rewind.maxPower);
-            }
-            this.isRewinding = false;
-        }
+	    // boost initially when starting from speed 0
+	    const speed = this.speed + (this.speed<0.3?(config.acceleration+0.01):config.acceleration)
+	    // dont't trigger when accel pressed on while brakes
+	    // actively pressed
+	    if (this.carState !== "stopped" && this.carState !== "braking") {
+		this.audioController.play("accelerate",{percSpeed:this.speed/GameConfig.physics.maxSpeed*100})
+	    }
+	    if (this.carState === "braking") {
+		// this.audioController.play("brake",{percSpeed:this.speed/GameConfig.physics.maxSpeed*100/10})
+		
+	    }
+	    this.carState = "moving"
+	    this.speed = Math.min(speed, config.maxSpeed);
+        } 
         
         // Braking
-        if (input.backward && this.isMoving) {
-            this.speed = Math.max(this.speed - config.deceleration * 2, 0);
-            const speedRatio = this.speed / config.maxSpeed;
-            this.rewindPower = GameConfig.rewind.maxPower * speedRatio;
-            
-            if (this.speed === 0) {
-                this.isMoving = false;
-                this.rewindPower = 0;
-                this.rewindTimer = 0;
-            }
+        if (input.backward) {
+            this.speed = Math.max(this.speed - config.deceleration * 10, 0);
+	    if (this.carState === "moving") {
+	    }
+	    if (this.speed !== 0 && this.carState === "braking") {
+		this.audioController.play("brake",{percSpeed:this.speed/GameConfig.physics.maxSpeed*100/10})
+	    }
+	    this.carState = "braking"
+	    // else {
+	    // }
+
         }
-        
         // Auto-deceleration
-        if (this.isMoving && !input.backward && !input.forward) {
-            this.rewindTimer -= 16.67;
-            
-            if (this.rewindTimer <= 0) {
-                this.isMoving = false;
-                this.rewindPower = 0;
-                this.speed = 0;
-            } else {
-                const timeRatio = this.rewindTimer / GameConfig.rewind.duration;
-                this.speed *= 0.998;
-                this.rewindPower *= timeRatio;
-            }
+        if (!input.backward && !input.forward) {
+            this.speed = Math.max(this.speed - config.deceleration, 0);
+	    if (this.speed === 0) {
+		this.carState = "stopped"
+	    } else {
+		let percSpeed = 2*this.speed/GameConfig.physics.maxSpeed*100
+		if (percSpeed>100) {
+		    percSpeed = 100
+		}
+		this.audioController.play("brake",{percSpeed})
+		this.carState = "idleSlowing"
+	    }
         }
         
         // Steering
         if (input.left) {
             this.lateralSpeed = Math.min(this.lateralSpeed + 0.005, config.maxLateralSpeed);
+            // this.lateralSpeed = .2;
         } else if (input.right) {
             this.lateralSpeed = Math.max(this.lateralSpeed - 0.005, -config.maxLateralSpeed);
+	    // carRotate -= 0.03*(this.speed/GameConfig.physics.maxSpeed)
+            // this.lateralSpeed = -.2;
         } else {
             this.lateralSpeed *= 0.9;
         }
-        
-        this.group.position.x += this.lateralSpeed;
+
+        this.group.position.x += this.lateralSpeed*this.speed*3.5;
         this.group.position.x = Math.max(-8, Math.min(8, this.group.position.x));
+	this.group.rotation.y = Math.sin(this.lateralSpeed)*this.speed*3.5
+	this.group.rotation.z = Math.sin(this.lateralSpeed)*this.speed/GameConfig.physics.maxSpeed
     }
     
     onPotholeHit() {

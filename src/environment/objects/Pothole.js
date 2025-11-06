@@ -95,7 +95,7 @@ export class Pothole {
         warningGroup.add(bg);
         
         warningGroup.position.set(0, 1.5, 0);
-        warningGroup.visible = false;
+        warningGroup.visible = true;
         
         return warningGroup;
     }

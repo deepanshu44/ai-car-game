@@ -12,10 +12,15 @@ import { BiomeManager } from '../environment/BiomeManager.js';
 import { TrafficManager } from '../entities/TrafficManager.js';
 import { Scenery } from '../environment/Scenery.js';
 import { Weather } from '../environment/Weather.js';
+import { BootScreen } from '../systems/StartUpScreen/StartUpScreen.js'
+import { VehicleMetrics } from '../systems/VehicleMetrics.js';
+import { PollutionTracker } from '../environment/PollutionTracker.js' 
+import { AudioController } from '../systems/AudioController.js';
 
 export class Game {
     constructor() {
         this.gameOver = false;
+	this.gameStarted = false
         this.distance = 0;
         
         this.init();
@@ -27,31 +32,53 @@ export class Game {
         this.renderer = new Renderer();
         this.inputHandler = new InputHandler();
         this.collisionDetector = new CollisionDetector();
-        this.uiManager = new UIManager();
+        this.uiManager = new UIManager(this.sceneManager.scene);
+	// this.vehicleMetrics = new VehicleMetrics(this.sceneManager.scene)
 
 	// Weather and environment
         this.weather = new Weather(this.sceneManager.scene);
         
         // Camera
         this.cameraController = new CameraController(this.sceneManager.camera);
-        
+
+	// Pollution Tracker
+	this.pollutionTracker = new PollutionTracker()
         // Game entities
-        this.playerCar = new PlayerCar(this.sceneManager.scene);
+        this.playerCar = new PlayerCar(this.sceneManager.scene,this.sceneManager.camera);
         this.road = new Road(this.sceneManager.scene);
         this.trafficManager = new TrafficManager(this.sceneManager.scene);
 	this.scenery = new Scenery(this.sceneManager.scene);
         this.biomeManager = new BiomeManager(this.sceneManager.scene);
-        
         // Event listeners
         this.setupEventListeners();
-        
-        // Start game loop
-        this.gameLoop();
+	// new BootScreen()
+
+	// on mobile
+	if(navigator.maxTouchPoints>0){
+	    this.setUpMobileControls() 
+	}
+
     }
     
-    setupEventListeners() {
+    setupEventListeners(){
+	// document.getElementById('startGame').addEventListener('click', ()=>this.startGame());
         window.addEventListener('resize', () => this.onWindowResize());
         document.getElementById('restart').addEventListener('click', () => this.restart());
+    }
+
+    setUpMobileControls(){
+	const controlDiv = document.getElementsByClassName("mobile-controls")[0]
+	controlDiv.className = "mobile-controls.active"
+	this.inputHandler.mobileScript()
+	document.getElementById("pollutionPanel").style.bottom = "170px"
+    }
+    
+    startGame() {
+        // document.getElementById('overlay').style.display = 'none';
+        // document.getElementsByClassName('boot-container')[0].style.display = 'none';
+        this.gameStarted = true;
+	// Start game loop
+	this.gameLoop()
     }
     
     update() {
@@ -74,7 +101,7 @@ export class Game {
         this.road.update(this.playerCar.speed);
         this.trafficManager.update(this.playerCar.speed, this.playerCar.position);
 	this.scenery.update(this.playerCar.speed);
-        this.biomeManager.update(this.distance, this.playerCar.speed);
+        this.biomeManager.update(this.distance,this.playerCar.speed);
 	this.weather.update();
         
         // Update camera
@@ -117,11 +144,15 @@ export class Game {
     updateUI() {
         this.uiManager.updateSpeed(this.playerCar.speed);
         this.uiManager.updateDistance(this.distance);
-        this.uiManager.updateRewindPower(
-            this.playerCar.rewindPower,
-            !this.playerCar.isMoving || this.playerCar.rewindPower < 90
-        );
+        this.uiManager.updateParked(this.playerCar.speed);
+        this.uiManager.updateBattery();
+        // this.uiManager.updateRewindPower(
+        //     this.playerCar.rewindPower,
+        //     !this.playerCar.isMoving || this.playerCar.rewindPower < 90
+        // );
         this.uiManager.updateFPS();
+	this.pollutionTracker.update(this.distance,this.playerCar.speed)
+	
     }
     
     handleNoclipMovement(input) {

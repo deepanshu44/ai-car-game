@@ -15,9 +15,12 @@ export class SimpleTreeManager {
 	trunk.translate(0, 1.5, 0);
 	
 	// Foliage (green)
-	const foliage = new THREE.ConeGeometry(1.2, 3, 8);
-	foliage.translate(0, 3.8, 0);
-	
+	const foliages = []
+	for(let i = 0 ; i < 3 ; ++i){
+	     foliages[i] = new THREE.ConeGeometry(1.2, 3, 8);
+	    foliages[i].translate(0, i+3.8, 0);
+	}
+
 	// Set brown color for trunk vertices
 	const trunkColors = [];
 	const brownColor = new THREE.Color(0x8B4513); // Brown
@@ -29,24 +32,27 @@ export class SimpleTreeManager {
 	// Set green color for foliage vertices
 	const foliageColors = [];
 	const greenColor = new THREE.Color(0x228b22); // Green
-	for (let i = 0; i < foliage.attributes.position.count; i++) {
+	for (let i = 0; i < foliages[0].attributes.position.count; i++) {
             foliageColors.push(greenColor.r, greenColor.g, greenColor.b);
 	}
-	foliage.setAttribute('color', new THREE.Float32BufferAttribute(foliageColors, 3));
+	foliages.forEach((foliage) => {
+	    foliage.setAttribute('color', new THREE.Float32BufferAttribute(foliageColors, 3));
+	})
 	
 	// Merge them
-	const merged = mergeGeometries([trunk, foliage]);
+	const merged = mergeGeometries([trunk, ...foliages]);
 	return merged;
     }
 
     createTrees() {
 	const geometry = this.createSimpleTreeGeometry();
-	// Enable vertex colors in material
+	// // Enable vertex colors in material
 	const material = new THREE.MeshLambertMaterial({ 
             vertexColors: true  // This makes it use vertex colors!
 	});
-	
+
 	this.trees = new THREE.InstancedMesh(geometry, material, 100);
+	// this.trees.count = 0;
 	this.trees.castShadow = true;
 	this.scene.add(this.trees);
 	
@@ -58,32 +64,61 @@ export class SimpleTreeManager {
     }
     
     addTree(x, z) {
-        if (this.count >= this.trees.count) {
+	if (this.count >= 100) {  // Check against max capacity
             console.warn('Tree pool exhausted');
             return;
-        }
-        
-        const sizeScale = 0.7 + Math.random() * 0.6;
-        const rotationY = Math.random() * Math.PI * 2;
-        
-        this.position.set(x, 0, z);
-        this.rotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotationY);
-        this.scale.set(sizeScale, sizeScale, sizeScale);
-        
-        this.matrix.compose(this.position, this.rotation, this.scale);
-        this.trees.setMatrixAt(this.count, this.matrix);
-        
-        this.treeData.push({
+	}
+	
+	const sizeScale = 0.7 + Math.random() * 0.6;
+	const rotationY = Math.random() * Math.PI * 2;
+	
+	this.position.set(x, 0, z);
+	this.rotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotationY);
+	this.scale.set(sizeScale, sizeScale, sizeScale);
+	
+	this.matrix.compose(this.position, this.rotation, this.scale);
+	this.trees.setMatrixAt(this.count, this.matrix);
+	
+	this.treeData.push({
             index: this.count,
             x: x,
             z: z,
             scale: sizeScale,
             rotation: rotationY
-        });
-        
-        this.count++;
-        this.trees.instanceMatrix.needsUpdate = true;
+	});
+	
+	this.count++;  // ✅ Keep this at the end, OR move it before setMatrixAt
+	this.trees.count = this.count;  // ✅ Update render count
+	this.trees.instanceMatrix.needsUpdate = true;
     }
+    // addTree(x, z) {
+    //     if (this.count >= this.trees.count) {
+    //         console.warn('Tree pool exhausted');
+    //         return;
+    //     }
+        
+    //     const sizeScale = 0.7 + Math.random() * 0.6;
+    //     const rotationY = Math.random() * Math.PI * 2;
+        
+    //     this.position.set(x, 0, z);
+    //     this.rotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotationY);
+    //     this.scale.set(sizeScale, sizeScale, sizeScale);
+        
+    //     this.matrix.compose(this.position, this.rotation, this.scale);
+    //     this.trees.setMatrixAt(this.count, this.matrix);
+        
+    //     this.treeData.push({
+    //         index: this.count,
+    //         x: x,
+    //         z: z,
+    //         scale: sizeScale,
+    //         rotation: rotationY
+    //     });
+        
+    //     this.count++;
+    // 	// this.trees.count = this.count;
+    //     this.trees.instanceMatrix.needsUpdate = true;
+    // }
     
     spawnTrees(RestrictedZones, Helpers) {
         for (let z = -50; z < 350; z += 12) {

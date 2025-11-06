@@ -12,9 +12,9 @@ export class TrafficManager {
     }
     
     spawnTraffic() {
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 3; i++) {
             this.trafficCars.push(new TrafficCar(this.scene, 50 + i * 40, -2.25));
-            this.trafficCars.push(new TrafficCar(this.scene, 70 + i * 40, -6.75));
+            this.trafficCars.push(new TrafficCar(this.scene, 70 + i * 40, 6.75));
         }
     }
     

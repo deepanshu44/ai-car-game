@@ -6,6 +6,7 @@ export class Train {
         this.scene = scene;
 	this.group = new THREE.Group();
 	this.scene.add(this.group);
+
 	this.distanceToSwitch = distanceToSwitch
 	this.group.position.set(0, 0, z);
 	
@@ -747,7 +748,7 @@ export class Train {
         gate.userData.tipLightMaterial = tipLightMaterial;
         gate.userData.side = side;
     }
-
+    
     addGateCounterweight(gate, side) {
         const counterWeightGeometry = new THREE.BoxGeometry(1, 0.8, 0.8);
         const counterWeightMaterial = new THREE.MeshLambertMaterial({ color: 0x424242 });

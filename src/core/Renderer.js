@@ -7,11 +7,12 @@ import { GameConfig } from '../config/GameConfig.js';
 export class Renderer {
     constructor() {
         this.renderer = new THREE.WebGLRenderer({ 
-            antialias: GameConfig.rendering.antialias 
+            antialias: GameConfig.rendering.antialias,
+	    // logarithmicDepthBuffer: true
         });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
-        // this.renderer.shadowMap.enabled = GameConfig.rendering.shadowsEnabled;
-        this.renderer.shadowMap.enabled = false;
+        this.renderer.shadowMap.enabled = GameConfig.rendering.shadowsEnabled;
+        // this.renderer.shadowMap.enabled = false;
         
         const container = document.getElementById('game-container');
         container.appendChild(this.renderer.domElement);

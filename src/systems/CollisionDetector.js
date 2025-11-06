@@ -1,5 +1,5 @@
 export class CollisionDetector {
-    checkCarCollision(car1, car2, threshold = 3) {
+    checkCarCollision(car1, car2, threshold = 2.5) {
         const dx = car1.position.x - car2.position.x;
         const dz = car1.position.z - car2.position.z;
         const distance = Math.sqrt(dx * dx + dz * dz);

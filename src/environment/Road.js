@@ -10,26 +10,25 @@ export class Road {
         this.dividers = [];
         this.fences = [];
         this.potholes = [];
-        this.laneMarkers = null;  // Changed to instanced mesh
+        this.laneMarkers = null; 
         this.markerData = [];
         
         this.createRoad();
-        this.createLaneMarkers();  // Now uses InstancedMesh
+        this.createLaneMarkers();
         this.createDividers();
         this.createFences();
         this.createEdgeStrips();
-	// this.spawnPotholes()
+	this.spawnPotholes()
     }
     
     createRoad() {
         const roadGeometry = new THREE.PlaneGeometry(18, 500);
         const roadMaterial = new THREE.MeshLambertMaterial({ color: Colors.ROAD });
-        
         for (let i = 0; i < 3; i++) {
             const road = new THREE.Mesh(roadGeometry, roadMaterial);
             road.rotation.x = -Math.PI / 2;
             road.position.z = i * 500 - 500;
-            road.receiveShadow = false;
+            road.receiveShadow = true;
             this.scene.add(road);
             this.segments.push(road);
         }
@@ -40,26 +39,27 @@ export class Road {
     createGrass() {
         const grassTexture = this.createGrassTexture();
         const grassPatches = [
-            { x: -34, color: Colors.GRASS_MEDIUM },
-            { x: -34, color: Colors.GRASS_DARK },
-            { x: -34, color: Colors.GRASS_LIGHT },
-            { x: 34, color: Colors.GRASS_MEDIUM },
-            { x: 34, color: Colors.GRASS_DARK },
-            { x: 34, color: Colors.GRASS_LIGHT }
+            { x: -84, color: Colors.GRASS_LIGHT },
+            { x: -84, color: Colors.GRASS_DARK },
+            { x: -84, color: Colors.GRASS_LIGHT },
+            { x: 84, color: Colors.GRASS_MEDIUM },
+            { x: 84, color: Colors.GRASS_DARK },
+            { x: 84, color: Colors.GRASS_LIGHT }
         ];
         
         grassPatches.forEach((patch, index) => {
-            const grassGeometry = new THREE.PlaneGeometry(50, 500);
+            const grassGeometry = new THREE.PlaneGeometry(150, 500);
             const grassMaterial = new THREE.MeshLambertMaterial({
                 map: grassTexture,
-                color: patch.color
+                // color: patch.color
+                color: Colors.GRASS_DARK
             });
             
             const grass = new THREE.Mesh(grassGeometry, grassMaterial);
             grass.rotation.x = -Math.PI / 2;
             grass.position.x = patch.x;
             grass.position.z = (index % 3) * 166 - 166;
-            grass.receiveShadow = false;
+            grass.receiveShadow = true;
             this.scene.add(grass);
         });
     }
@@ -93,7 +93,6 @@ export class Road {
         return texture;
     }
     
-    // ✅ OPTIMIZED: Use InstancedMesh for lane markers
     createLaneMarkers() {
         const markerGeometry = new THREE.BoxGeometry(0.3, 0.1, 3);
         const markerMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
@@ -147,13 +146,14 @@ export class Road {
                     this.scene.add(divider);
                     this.dividers.push(divider);
                     segmentStart = null;
-                } else if (localZ === 250 && segmentStart !== null) {
-                    const divider = this.createDividerSegment(segmentStart, localZ);
-                    divider.position.set(0, 0, baseZ);
-                    this.scene.add(divider);
-                    this.dividers.push(divider);
-                    segmentStart = null;
                 }
+		// else if (localZ === 250 && segmentStart !== null) {
+                //     const divider = this.createDividerSegment(segmentStart, localZ);
+                //     divider.position.set(0, 0, baseZ);
+                //     this.scene.add(divider);
+                //     this.dividers.push(divider);
+                //     segmentStart = null;
+                // }
             }
         }
     }
@@ -165,31 +165,31 @@ export class Road {
         
         if (length < 10) return dividerGroup;
         
-        // Main concrete barrier
-        const barrierShape = new THREE.Shape();
-        barrierShape.moveTo(-0.3, 0);
-        barrierShape.lineTo(-0.2, 0.5);
-        barrierShape.lineTo(-0.2, 0.7);
-        barrierShape.lineTo(0.2, 0.7);
-        barrierShape.lineTo(0.2, 0.5);
-        barrierShape.lineTo(0.3, 0);
-        barrierShape.lineTo(-0.3, 0);
+        // // Main concrete barrier
+        // const barrierShape = new THREE.Shape();
+        // barrierShape.moveTo(-0.3, 0);
+        // barrierShape.lineTo(-0.2, 0.5);
+        // barrierShape.lineTo(-0.2, 0.7);
+        // barrierShape.lineTo(0.2, 0.7);
+        // barrierShape.lineTo(0.2, 0.5);
+        // barrierShape.lineTo(0.3, 0);
+        // barrierShape.lineTo(-0.3, 0);
         
-        const extrudeSettings = {
-            steps: 1,
-            depth: length,
-            bevelEnabled: false
-        };
+        // const extrudeSettings = {
+        //     steps: 1,
+        //     depth: length,
+        //     bevelEnabled: false
+        // };
         
-        const barrierGeometry = new THREE.ExtrudeGeometry(barrierShape, extrudeSettings);
-        const barrierMaterial = new THREE.MeshLambertMaterial({ 
-            color: 0xcccccc,
-            flatShading: false
-        });
-        const barrier = new THREE.Mesh(barrierGeometry, barrierMaterial);
-        barrier.rotation.x = Math.PI / 2;
-        barrier.position.set(0, 0, startZ);
-        dividerGroup.add(barrier);
+        // const barrierGeometry = new THREE.ExtrudeGeometry(barrierShape, extrudeSettings);
+        // const barrierMaterial = new THREE.MeshLambertMaterial({ 
+        //     color: 0xcccccc,
+        //     flatShading: false
+        // });
+        // const barrier = new THREE.Mesh(barrierGeometry, barrierMaterial);
+        // barrier.rotation.x = Math.PI / 2;
+        // barrier.position.set(0, 0, startZ);
+        // dividerGroup.add(barrier);
         
         // ✅ OPTIMIZED: Shared geometry and materials for reflectors
         if (!Road.reflectorGeometry) {
@@ -359,7 +359,7 @@ export class Road {
     spawnPotholes() {
         const positions = [
             { x: -4, z: 40 }, { x: 3, z: 70 },
-            { x: -5, z: 140 }, { x: 2, z: 200 },
+            // { x: -5, z: 140 }, { x: 2, z: 200 },
             { x: -3, z: 260 }, { x: 4, z: 290 }
         ];
         
@@ -419,6 +419,7 @@ export class Road {
         });
         
         this.potholes.forEach(pothole => {
+	    // pothole.position.x = Math.floor(Math.random() * 18) - 8
             pothole.update(worldSpeed);
         });
     }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { MeshFactory } from '../utils/MeshFactory.js';
+import { GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 
 export class TrafficCar {
     constructor(scene, z, laneX) {
@@ -10,6 +11,7 @@ export class TrafficCar {
         
         this.createCar();
         this.group.position.set(laneX, 0, z);
+	// this.group.rotation.y = Math.PI
         scene.add(this.group);
     }
     
@@ -47,25 +49,33 @@ export class TrafficCar {
     
     createLights() {
         const headlightMaterial = new THREE.MeshStandardMaterial({
-            color: 0xffffcc,
-            emissive: 0xffffcc,
+            color: 0xff3333,
+            emissive: 0xff3333,
             emissiveIntensity: 2
         });
+	// const headlightGeometry = new THREE.SphereGeometry(0.2, 32, 32);
+	const headlightGeometry = new THREE.BoxGeometry(0.5, 0.2, 0.4);
         
-        const headlight1 = MeshFactory.createSphere(0.2, 0xffffcc);
+        // const headlight1 = MeshFactory.createSphere(0.2, 0xffffcc);
+	const headlight1 = new THREE.Mesh(headlightGeometry, headlightMaterial);
         headlight1.position.set(-0.8, 0.8, -1.9);
         this.group.add(headlight1);
         
-        const headlight2 = MeshFactory.createSphere(0.2, 0xffffcc);
+        const headlight2 = new THREE.Mesh(headlightGeometry, headlightMaterial);
         headlight2.position.set(0.8, 0.8, -1.9);
         this.group.add(headlight2);
     }
     
     update(worldSpeed) {
-        this.group.position.z -= worldSpeed + this.speed;
+        // this.group.position.z -= worldSpeed + this.speed;
+        this.group.position.z += 0.1 - worldSpeed
         
         if (this.group.position.z < -30) {
             this.group.position.z = 250;
+            this.group.position.x = this.lane;
+        }
+	if (this.group.position.z > 250) {
+            this.group.position.z = -30;
             this.group.position.x = this.lane;
         }
     }

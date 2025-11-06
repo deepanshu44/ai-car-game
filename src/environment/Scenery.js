@@ -19,7 +19,7 @@ export class Scenery {
     
     spawnAll() {
         this.spawnTreesAndBushesAndLamps();
-        this.spawnHouses();
+        // this.spawnHouses();
         this.spawnClouds();
 	// FIXME: frame drops -20fps on spawning bridges
         // this.spawnBridges();
@@ -116,20 +116,24 @@ export class Scenery {
     
     spawnHouses() {
         const housePositions = [
-            { x: -15, z: 30, color: 0xd2b48c },
-            { x: 15, z: 60, color: 0xd2b48c },
-            { x: -18, z: 220, color: 0xd2b48c },
-            { x: 20, z: 250, color: 0xd2b48c },
-            { x: -22, z: 280, color: 0xd2b48c },
-            { x: -20, z: 150, color: 0xc9a86a },
-            { x: 17, z: 200, color: 0xe8d4b0 },
-            { x: -19, z: 270, color: 0xb89968 }
+            { x: -25, z: 30, color: 0xd2b48c },
+            { x: 25, z: 60, color: 0xd2b48c },
+            { x: -48, z: 220, color: 0xd2b48c },
+            { x: 30, z: 250, color: 0xd2b48c },
+            { x: -32, z: 280, color: 0xd2b48c },
+            { x: -30, z: 150, color: 0xc9a86a },
+            { x: 27, z: 200, color: 0xe8d4b0 },
+            { x: -29, z: 270, color: 0xb89968 }
         ];
         
         housePositions.forEach(pos => {
             if (!Helpers.isInRestrictedZone(pos.x, pos.z, RestrictedZones.intersections)) {
-                const house = new House(this.scene, pos.x, pos.z, pos.color);
-                this.objects.push(house);
+		// only one house is displayed at a time
+		// switch between the houses when biome changed (y,-y)
+		// which one to spawn first specified in the last argument
+                const houseCity = new House(this.scene, pos.x, pos.z, pos.color,this.distance,true);
+                const houseFarmland = new House(this.scene, pos.x, pos.z, pos.color,this.distance,false);
+                this.objects.push(houseCity,houseFarmland);
             }
         });
     }

@@ -6,10 +6,26 @@ export class Weather {
         this.stars = null;
         this.moon = null;
         
-        this.createNightSky();
-        this.createMoon();
+	if (this.scene.timeOfTheDay === "day") {
+            this.createSun();
+	    
+	} else {
+            this.createNightSky();
+            this.createMoon();
+	}
     }
-    
+
+    createSun(){
+	const sunGeometry = new THREE.SphereGeometry(3, 16, 16);
+        const sunMaterial = new THREE.MeshLambertMaterial({ 
+            color: 0xffffcc,
+            emissive: 0xffffaa,
+        });
+        this.sun = new THREE.Mesh(sunGeometry, sunMaterial);
+        this.sun.position.set(40, 50, 100);
+        this.scene.add(this.sun);
+    }
+
     createNightSky() {
         this.scene.background = new THREE.Color(0x000011); // 0x0a1a33
         this.scene.fog = new THREE.Fog(0x000011, 1, 300);

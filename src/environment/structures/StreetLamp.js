@@ -18,11 +18,16 @@ export class StreetLampManager {
             StreetLampManager.lampHeadMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
             
             StreetLampManager.bulbGeometry = new THREE.SphereGeometry(0.3, 8, 8);
-            StreetLampManager.bulbMaterial = new THREE.MeshBasicMaterial({ 
-                color: 0xffffbb,
-                emissive: 0xffffbb,
-                emissiveIntensity: 1.5
-            });
+	    if (this.scene.timeOfTheDay !== "day") {
+		
+		StreetLampManager.bulbMaterial = new THREE.MeshBasicMaterial({ 
+                    color: 0xffffbb,
+                    emissive: 0xffffbb,
+                    emissiveIntensity: 1.5
+		});
+	    } else {
+		StreetLampManager.bulbMaterial = new THREE.MeshBasicMaterial();
+	    }
             
             StreetLampManager.lightPoolTexture = this.createLightPoolTexture();
             StreetLampManager.lightPoolGeometry = new THREE.CircleGeometry(5, 32);
@@ -78,7 +83,8 @@ export class StreetLampManager {
             StreetLampManager.poleMaterial,
             count
         );
-        this.poles.castShadow = false;
+        this.poles.castShadow = true;
+	this.poles.name = "lampPole"
         this.scene.add(this.poles);
         
         this.lampHeads = new THREE.InstancedMesh(
@@ -86,7 +92,7 @@ export class StreetLampManager {
             StreetLampManager.lampHeadMaterial,
             count
         );
-        this.lampHeads.castShadow = false;
+        this.lampHeads.castShadow = true;
         this.scene.add(this.lampHeads);
         
         this.bulbs = new THREE.InstancedMesh(
@@ -96,11 +102,13 @@ export class StreetLampManager {
         );
         this.scene.add(this.bulbs);
         
-        this.lightPools = new THREE.InstancedMesh(
-            StreetLampManager.lightPoolGeometry,
-            StreetLampManager.lightPoolMaterial,
-            count
-        );
+	if (this.scene.timeOfTheDay !== "day") {
+            this.lightPools = new THREE.InstancedMesh(
+		StreetLampManager.lightPoolGeometry,
+		StreetLampManager.lightPoolMaterial,
+		count
+            );
+	}
         this.scene.add(this.lightPools);
         
         // Position all lamps
@@ -120,7 +128,7 @@ export class StreetLampManager {
         this.poles.instanceMatrix.needsUpdate = true;
         this.lampHeads.instanceMatrix.needsUpdate = true;
         this.bulbs.instanceMatrix.needsUpdate = true;
-        this.lightPools.instanceMatrix.needsUpdate = true;
+        this.scene.timeOfTheDay !== "day"?this.lightPools.instanceMatrix.needsUpdate = true:null;
         
         this.lampCount = index;
     }
@@ -131,7 +139,7 @@ export class StreetLampManager {
         this.rotation.set(0, 0, 0, 1);
         this.matrix.compose(this.position, this.rotation, this.scale);
         this.poles.setMatrixAt(index, this.matrix);
-        
+	
         // Lamp head
         this.position.set(x, 5.3, z);
         this.matrix.compose(this.position, this.rotation, this.scale);
@@ -146,7 +154,7 @@ export class StreetLampManager {
         this.position.set(x, 0.05, z);
         this.rotation.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
         this.matrix.compose(this.position, this.rotation, this.scale);
-        this.lightPools.setMatrixAt(index, this.matrix);
+        this.scene.timeOfTheDay !== "day"?this.lightPools.setMatrixAt(index, this.matrix):null;
         
         // Store data for updates
         this.lampData.push({ index, x, z });
@@ -182,13 +190,13 @@ export class StreetLampManager {
             // Update light pool
             this.position.set(lamp.x, 0.05, lamp.z);
             this.matrix.compose(this.position, poolRotation, this.scale);
-            this.lightPools.setMatrixAt(lamp.index, this.matrix);
+            this.scene.timeOfTheDay !== "day"?this.lightPools.setMatrixAt(lamp.index, this.matrix):null;
         });
         
         this.poles.instanceMatrix.needsUpdate = true;
         this.lampHeads.instanceMatrix.needsUpdate = true;
         this.bulbs.instanceMatrix.needsUpdate = true;
-        this.lightPools.instanceMatrix.needsUpdate = true;
+        this.scene.timeOfTheDay !== "day"?this.lightPools.instanceMatrix.needsUpdate = true:null;
     }
     
     dispose() {

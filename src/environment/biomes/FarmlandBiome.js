@@ -1,16 +1,21 @@
 import * as THREE from 'three';
 import { Helpers } from '../../utils/Helpers.js';
 import { RestrictedZones } from '../../utils/Constants.js';
+import { VegetableCart } from '../objects/VegetableCart.js'
 import { Train } from '../structures/Train.js'
+import { House } from '../objects/House.js'
+
 
 export class FarmlandBiome {
     constructor(scene,distanceToSwitch) {
         this.scene = scene;
         this.objects = [];
-        this.trains = []
+        this.trains = [];
+	this.houses = []
 	this.distanceToSwitch = distanceToSwitch;
-        this.spawnFarmland();
+        // this.spawnFarmland();
 	this.spawnTrain()
+	// this.spawnHouses()
     }
 
     spawnTrain(){
@@ -31,7 +36,7 @@ export class FarmlandBiome {
         // Windmills
         this.createWindmill(-28, 160);
         this.createWindmill(25, 240);
-        
+	
         // Crop fields
         for (let z = 40; z < 280; z += 40) {
             if (!Helpers.isInRestrictedZone(-15, z, RestrictedZones.intersections)) {
@@ -64,6 +69,94 @@ export class FarmlandBiome {
                 this.createHayBale(pos.x, pos.z);
             }
         });
+
+	// hayPositions.forEach((pos) => {
+        //     if (!Helpers.isInRestrictedZone(pos.x, pos.z, RestrictedZones.intersections)) {
+        //         const cart = new VegetableCart(this.scene,pos.x-10,pos.z-5)
+	// 	this.objects.push({ mesh: cart.group, type: 'vegetablecart', initialZ: pos.z+5 })
+        //     }
+	// })
+
+	// Spawn beside lamp
+	const entry = this.scene.getObjectByName('lampPole');
+	const matrix = new THREE.Matrix4();
+	const position = new THREE.Vector3();
+
+	entry.getMatrixAt(0, matrix);
+	position.setFromMatrixPosition(matrix);
+
+	// console.log("foundMesh",foundMesh.getMatrixAt(0, matrix))
+        // const cart = new VegetableCart(this.scene,foundMesh.position.x,foundMesh.position.z+3)
+	// this.objects.push({ mesh: cart.group, type: 'vegetablecart', initialZ: 0 })
+    }
+
+    spawnHouses(gltf) {
+        const housePositions = [
+            { x: -25, z: 30, color: 0xd2b48c },
+            { x: 25, z: 60, color: 0xd2b48c },
+            { x: -48, z: 220, color: 0xd2b48c },
+            { x: 30, z: 250, color: 0xd2b48c },
+            { x: -32, z: 280, color: 0xd2b48c },
+            { x: -30, z: 150, color: 0xc9a86a },
+            { x: 27, z: 200, color: 0xe8d4b0 },
+            { x: -29, z: 270, color: 0xb89968 }
+        ];
+        if (gltf) {
+	    housePositions.forEach(pos => {
+		if (!Helpers.isInRestrictedZone(pos.x, pos.z, RestrictedZones.intersections)) {
+		    // only one house is displayed at a time
+		    // switch between the houses when biome changed (y,-y)
+		    // which one to spawn first specified in the last
+		    // argument
+		    let root;
+		    if (Math.random()>0.5) {
+			root = gltf.scene.getObjectByName("Block_4")
+		    } else {
+			root = gltf.scene.getObjectByName("Block_3")
+		    }
+		    let clone = root.clone()
+		    clone.scale.set(.04,.04,.04)
+		    if (pos.x>0) {
+			clone.position.set(pos.x+10,2,pos.z)
+		    } else {
+			clone.position.set(pos.x-10,2,pos.z)
+		    }
+		    this.scene.add(clone)
+		    this.houses.push({group:clone});
+		    clone.position.y = -500
+
+		    // const spotLight = new THREE.SpotLight(0xffffdd, 50,20);
+		    // const buildingX = clone.position.x
+		    // const buildingZ = clone.position.z
+		    // const buildingHeight = clone.position.y
+
+		    // spotLight.position.set(buildingX + 5, 5.5, buildingZ-10); // ground level, offset from building
+		    // spotLight.target.position.set(buildingX+50, buildingHeight * 5.7, buildingZ-50); // aim at upper facade
+		    // spotLight.angle = Math.PI / 6;
+		    // spotLight.penumbra = 20.3;
+		    // spotLight.castShadow = false; // turn off shadows
+		    // this.scene.add(spotLight)
+		    // this.scene.add(spotLight.target);
+
+		    // argument format match to that in else statement
+		    // House class has group property which is used in
+		    // update function
+		    // this.houses.push({group:spotLight});
+		    // spotLight.position.y = -500
+		    // this.houses.push({group:spotLight2});
+
+		}
+            })
+	} else {
+	    housePositions.forEach(pos => {
+		if (!Helpers.isInRestrictedZone(pos.x, pos.z, RestrictedZones.intersections)) {
+		    const house = new House(this.scene, pos.x, pos.z, pos.color);
+		    // house.group.position.y = -500
+		    this.houses.push(house);
+		    
+		}
+            })
+	}
     }
     
     createFarm(x, z) {
@@ -290,12 +383,11 @@ export class FarmlandBiome {
         this.scene.add(hayGroup);
         this.objects.push({ mesh: hayGroup, type: 'hay', initialZ: z });
     }
-    
+
     update(worldSpeed) {
         const time = Date.now() * 0.001;
         
         this.objects.forEach(obj => {
-	    // console.log("updating")
             obj.mesh.position.z -= worldSpeed;
             
             if (obj.mesh.position.z < -50) {
@@ -308,7 +400,7 @@ export class FarmlandBiome {
                     blade.rotation.z += 0.02;
                 });
             }
-            
+
             // Gentle sway for crops
             if (obj.type === 'crops') {
                 obj.mesh.rotation.z = Math.sin(time + obj.initialZ * 0.1) * 0.05;
@@ -318,9 +410,17 @@ export class FarmlandBiome {
 	this.trains.forEach(obj => {
 	    obj.update(worldSpeed);
 	})
+
+	this.houses.forEach(obj => {
+            obj.group.position.z -= worldSpeed;
+	    if (obj.group.position.z < -50) {
+		obj.group.position.z += 350;
+            }
+        })
     }
 
     show() {
+	console.log("show called")
         this.objects.forEach(obj => {
             // obj.mesh.visible = true;
 	    obj.mesh.position.y = 0
@@ -329,6 +429,11 @@ export class FarmlandBiome {
 	this.trains.forEach(obj => {
             // obj.group.visible = true;
 	    obj.group.position.y = 0
+        });
+
+	this.houses.forEach(obj => {
+            // obj.group.visible = true;
+	    obj.group.position.y = 2
         });
     }
     
@@ -339,6 +444,11 @@ export class FarmlandBiome {
         });
 
 	this.trains.forEach(obj => {
+            // obj.group.visible = false;
+	    obj.group.position.y = -100
+        });
+
+	this.houses.forEach(obj => {
             // obj.group.visible = false;
 	    obj.group.position.y = -100
         });

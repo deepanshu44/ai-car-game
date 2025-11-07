@@ -20,7 +20,6 @@ import { AudioController } from '../systems/AudioController.js';
 export class Game {
     constructor() {
         this.gameOver = false;
-	this.gameStarted = false
         this.distance = 0;
         
         this.init();
@@ -57,7 +56,16 @@ export class Game {
 	if(navigator.maxTouchPoints>0){
 	    this.setUpMobileControls() 
 	}
+	
+    }
 
+    async gameLoaded() {
+	try {
+	    await this.biomeManager.loaded
+	    return Promise.resolve()
+	} catch (err) {
+	    throw new Error("error in game loading")
+	} 
     }
     
     setupEventListeners(){
@@ -76,7 +84,6 @@ export class Game {
     startGame() {
         // document.getElementById('overlay').style.display = 'none';
         // document.getElementsByClassName('boot-container')[0].style.display = 'none';
-        this.gameStarted = true;
 	// Start game loop
 	this.gameLoop()
     }

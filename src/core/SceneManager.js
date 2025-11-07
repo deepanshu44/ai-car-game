@@ -6,6 +6,7 @@ export class SceneManager {
         this.scene = new THREE.Scene();
         this.camera = this.createCamera();
 	this.scene.timeOfTheDay = "day"
+	this.gameLoaded = false
         this.setupLighting();
     }
     

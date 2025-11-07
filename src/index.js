@@ -2,14 +2,14 @@ import { Game } from './core/Game.js';
 
 // Start the game when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    // if (window.location.pathname === "/play") {
+    if (window.location.pathname === "/play") {
     const game = new Game();
     game.startGame()
-    // 	// Expose game instance for debugging
-    // 	window.game = game;
-    // } else {
-    // }
-	// load()
+	// Expose game instance for debugging
+	window.game = game;
+    } else {
+	load()
+    }
 });
 
 async function load(page){
@@ -27,6 +27,8 @@ async function load(page){
 		// welcomeScript()
 		document.body.innerHTML = bck
 		const game = new Game();
+		// wait until everything loads
+		await game.gameLoaded()
 		game.startGame()
 	    }, 2000)
 	})

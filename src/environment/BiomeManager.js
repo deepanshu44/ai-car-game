@@ -24,7 +24,7 @@ export class BiomeManager {
 	// Start with city biome visible
         this.farmlandBiome.hide();
 	this.createTunnel()
-	this.loadHouseModel()
+	this.loaded = this.loadHouseModel()
     }
     
     update(distance,worldSpeed) {
@@ -120,13 +120,21 @@ export class BiomeManager {
         
         }
     loadHouseModel(){
-	const gltfLoader = new GLTFLoader();
-	gltfLoader.load( 'https://threejs.org/manual/examples/resources/models/cartoon_lowpoly_small_city_free_pack/scene.gltf',
-			 (gltf) => {
-			     this.farmlandBiome.spawnHouses(gltf)
-			     this.cityBiome.spawnHouses(gltf)
-			     
-			 })
+	return new Promise((resolve,reject)=>{
+	    const gltfLoader = new GLTFLoader();
+	    gltfLoader.load('https://threejs.org/manual/examples/resources/models/cartoon_lowpoly_small_city_free_pack/scene.gltf',
+			    async (gltf) => {
+				try {
+				    await this.farmlandBiome.spawnHouses(gltf)
+				    await this.cityBiome.spawnHouses(gltf)
+				    resolve("done")
+				} catch (err) {
+				    reject("loading model failed")
+				} 
+				
+			    },undefined,(error) => reject("loading model failed"))
+
+	});
 	
     }
     // applyTunnelLighting(lighting) {

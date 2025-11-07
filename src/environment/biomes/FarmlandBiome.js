@@ -157,6 +157,7 @@ export class FarmlandBiome {
 		}
             })
 	}
+	return Promise.resolve()
     }
     
     createFarm(x, z) {

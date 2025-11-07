@@ -168,6 +168,7 @@ export class CityBiome {
 		}
             })
 	}
+	return Promise.resolve()
     }
 
     update(worldSpeed) {

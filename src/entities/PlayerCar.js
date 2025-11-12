@@ -24,7 +24,7 @@ export class PlayerCar {
 	// "Cartoon Low Poly Futuristic Car" (https://skfb.ly/oEnSD)
 	// by antonmoek is licensed under Creative Commons Attribution
 	// (http://creativecommons.org/licenses/by/4.0/).
-	loader.load('/${__REPO_NAME__}/cartoon_low_poly_futuristic_car/scene.gltf', (gltf) => {
+	loader.load(`/${__REPO_NAME__}/cartoon_low_poly_futuristic_car/scene.gltf`, (gltf) => {
 	    const car = gltf.scene;
 	    car.scale.set(1.5, 1.5, 1.5);
 	    car.position.y = 1.5;
@@ -40,7 +40,7 @@ export class PlayerCar {
 	    console.error('Error loading model:', error);
 	})
         
-	this.group.position.set(
+	    this.group.position.set(
             GameConfig.road.playerLane * GameConfig.road.laneWidth,
             0,
             0
@@ -169,7 +169,7 @@ export class PlayerCar {
         const segments = 32;
         const vertices = [0, 0, 0];
         const uvs = [0.5, 1.0];
-        const indices = [];\n        
+        const indices = [];
         for (let i = 0; i <= segments; i++) {
             const theta = -angle / 2 + (angle / segments) * i;
             const x = Math.sin(theta) * radius;

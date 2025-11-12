@@ -16,8 +16,8 @@ async function load(page){
     // Initial index.html page loads the game. Instead, copy that html
     // content into a variable and replace it with the welcome page.
     let bck = document.body.innerHTML
-    let welcome = await fetch("/welcome.html")
-    let loading = await fetch("/loading.html")
+    let welcome = await fetch("/welcome")
+    let loading = await fetch("/loading")
     document.body.innerHTML = await welcome.text()
 	new BootScreen();
 	document.getElementById("startGame").addEventListener("click",async ()=>{

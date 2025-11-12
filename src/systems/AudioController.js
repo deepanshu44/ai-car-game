@@ -20,13 +20,13 @@ export class AudioController {
     }
 
     loadAudio() {
-	this.audioLoader.load('/static/car-run.mp3', (buffer) => {
+	this.audioLoader.load('/car-ai-game/static/car-run.mp3', (buffer) => {
 	    this.buffers.accelerateBuffer = buffer;
 	});
-	this.audioLoader.load('/static/car-cruise.mp3', (buffer) => {
+	this.audioLoader.load('/car-ai-game/static/car-cruise.mp3', (buffer) => {
 	    this.buffers.cruiseBuffer = buffer;
 	});
-	this.audioLoader.load('/static/car-slow.mp3', (buffer) => {
+	this.audioLoader.load('/car-ai-game/static/car-slow.mp3', (buffer) => {
 	    this.buffers.brakeBuffer = buffer;
 	    // this.engineSound2.play()
 	});

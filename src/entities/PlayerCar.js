@@ -24,7 +24,7 @@ export class PlayerCar {
 	// "Cartoon Low Poly Futuristic Car" (https://skfb.ly/oEnSD)
 	// by antonmoek is licensed under Creative Commons Attribution
 	// (http://creativecommons.org/licenses/by/4.0/).
-	loader.load('src/entities/cartoon_low_poly_futuristic_car/scene.gltf', (gltf) => {
+	loader.load('/cartoon_low_poly_futuristic_car/scene.gltf', (gltf) => {
 	    const car = gltf.scene;
 	    car.scale.set(1.5, 1.5, 1.5);
 	    car.position.y = 1.5;

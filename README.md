@@ -35,7 +35,7 @@ This game is currently in active development. Features and gameplay mechanics ar
 
 ## 🚀 Getting Started
 
-Click the link on the right or [Play the Game](https://yourgame.com) to play
+Click the link on the right or [Play the Game](https://deepanshu44.github.io/ai-car-game/) to play
 
 ## 🎨 Game Elements
 

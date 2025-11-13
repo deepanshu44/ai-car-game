@@ -87,6 +87,8 @@ This project is in early development. Contributions, ideas, and feedback are wel
 ## 🙏 Acknowledgments
 
 - Built with assistance from Claude AI and some Mistral's LeChat
+- gas pump icon -> https://game-icons.net/1x1/delapouite/gas-pump.html
+- Wonderful car model design taken from "Cartoon Low Poly Futuristic Car" (https://sketchfab.com/3d-models/cartoon-low-poly-futuristic-car-994c56e9ecd74fbd9f760640cc7342e5) by antonmoek (https://sketchfab.com/antonmoek) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
 - Three.js community for excellent documentation
 - [Add other credits]
 

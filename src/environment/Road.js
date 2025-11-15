@@ -50,7 +50,7 @@ export class Road {
         grassPatches.forEach((patch, index) => {
             const grassGeometry = new THREE.PlaneGeometry(150, 500);
             const grassMaterial = new THREE.MeshLambertMaterial({
-                map: grassTexture,
+                // map: grassTexture,
                 // color: patch.color
                 color: Colors.GRASS_DARK
             });
